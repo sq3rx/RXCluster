@@ -13,18 +13,22 @@
 
 ## Docker (recommended)
 
-1. Create your configuration:
-
-   ```bash
-   cp config/rxcluster.example.yaml config/rxcluster.yaml
-   ```
-
-   Edit at least `station.callsign` and `station.operator_grid`.
-
-2. Build and start:
+1. Build and start. The image is built straight from git and the configuration
+   is seeded automatically from the bundled example on first start:
 
    ```bash
    docker compose up --build -d
+   ```
+
+2. Edit at least `station.callsign` and `station.operator_grid`. The config is
+   kept in the `rxcluster-config` volume, so export it, edit it, then push it
+   back:
+
+   ```bash
+   docker compose cp rxcluster:/app/config/rxcluster.yaml ./rxcluster.yaml
+   # edit ./rxcluster.yaml
+   docker compose cp ./rxcluster.yaml rxcluster:/app/config/rxcluster.yaml
+   docker compose restart rxcluster
    ```
 
 3. Check health and logs:
@@ -34,8 +38,13 @@
    docker compose logs -f rxcluster
    ```
 
-The compose file mounts `./config/rxcluster.yaml`, `./data` and `./logs` as
-volumes, so configuration changes only require a restart (not a rebuild).
+All mutable state (configuration, reference data, per-callsign users, logs)
+lives in named volumes, so `docker compose up --build` picks up new image
+versions without touching your settings. To build from a different branch or
+tag, override `RXCLUSTER_REF` (and optionally `RXCLUSTER_REPO`) under the
+service's `build.args`. To edit configuration directly on the host instead,
+replace the `rxcluster-config` volume with a bind mount, e.g.
+`- ./config:/app/config`.
 
 ## Local installation (Python)
 
@@ -102,4 +111,5 @@ telnet your-host 7300
 ## Uninstalling / resetting
 
 The application keeps no persistent state of its own; stopping the container is
-enough. Remove `config/rxcluster.yaml`, `data/` and `logs/` to reset.
+enough. Remove the named volumes (`docker compose down -v`) to reset the
+configuration, reference data, users and logs.

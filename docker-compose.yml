@@ -4,10 +4,18 @@
 # single service with no external dependencies. Optional sidecar services
 # (Redis, Prometheus, Grafana) are included but commented out; enable them only
 # if you need shared caching, long-term metrics or dashboards.
+#
+# The image is built straight from git (see the build args). All mutable state
+# lives in named volumes, so rebuilding or upgrading the image keeps your
+# configuration, reference data, users and logs.
 
 services:
   rxcluster:
-    build: .
+    build:
+      context: .
+      args:
+        RXCLUSTER_REPO: https://github.com/sq3rx/RXCluster.git
+        RXCLUSTER_REF: master
     image: rxcluster:latest
     container_name: rxcluster
     restart: unless-stopped
@@ -15,15 +23,16 @@ services:
       - "7300:7300"   # Telnet to N1MM Logger+
       - "8080:8080"   # health / metrics
     volumes:
-      # Local configuration (may contain callsigns/passwords).
-      - ./config/rxcluster.yaml:/app/config/rxcluster.yaml:ro
+      # Configuration (may contain callsigns/passwords). Seeded from the bundled
+      # example on first start and preserved across image upgrades.
+      - rxcluster-config:/app/config
       # Persistent reference data (SCP, cty.dat, patt3ch.lst).
-      - ./data:/app/data
+      - rxcluster-data:/app/data
       # Per-callsign settings (separate volume so it stays writable even when
-      # the reference-data bind mount is owned by another user).
+      # the reference-data volume is owned by another user).
       - rxcluster-users:/app/data/users
       # Logs.
-      - ./logs:/var/log/rxcluster
+      - rxcluster-logs:/var/log/rxcluster
     healthcheck:
       test:
         - CMD
@@ -68,5 +77,9 @@ services:
 #   grafana-data:
 
 volumes:
-  # Per-callsign settings persisted across container restarts.
+  # Configuration and runtime state persisted across container restarts and
+  # image upgrades.
+  rxcluster-config:
+  rxcluster-data:
   rxcluster-users:
+  rxcluster-logs:

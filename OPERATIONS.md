@@ -31,8 +31,16 @@ docker compose restart rxcluster     # apply a config change
 docker compose down                  # stop and remove
 ```
 
-Configuration is mounted, so editing `config/rxcluster.yaml` only needs a
-restart, not a rebuild.
+Configuration lives in the `rxcluster-config` volume and is preserved across
+image upgrades. Apply a change by exporting it, editing, copying it back and
+restarting; no rebuild is needed:
+
+```bash
+docker compose cp rxcluster:/app/config/rxcluster.yaml ./rxcluster.yaml
+# edit ./rxcluster.yaml
+docker compose cp ./rxcluster.yaml rxcluster:/app/config/rxcluster.yaml
+docker compose restart rxcluster
+```
 
 ## Performance tuning
 
