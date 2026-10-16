@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rxcluster"
+version = "0.1.0"
+description = "High-performance DX Cluster aggregator/proxy serving an enriched spot stream over Telnet for N1MM Logger+."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "RXCluster contributors" }]
+keywords = ["ham-radio", "dx-cluster", "rbn", "n1mm", "contest", "voacap"]
+dependencies = [
+    "pydantic>=2.6",
+    "PyYAML>=6.0",
+    "orjson>=3.9",
+    "httpx>=0.27",
+    "aiomqtt>=2.0",
+    "uvloop>=0.19; sys_platform != 'win32'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+rxcluster = "rxcluster.main:main"
+
+[tool.setuptools.packages.find]
+include = ["rxcluster*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

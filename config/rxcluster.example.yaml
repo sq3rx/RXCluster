@@ -1,0 +1,191 @@
+# RXCluster configuration.
+#
+# Copy this file to config/rxcluster.yaml and edit it. The real file is
+# git-ignored because it may contain callsigns and passwords.
+#
+# All configuration lives in this YAML file; there is no environment-variable
+# layer. Values not present here fall back to the built-in defaults.
+
+station:
+  # Callsign used to log in to the source clusters and shown to clients.
+  callsign: SQ9ABC
+  # Maidenhead locator of the operator's station (used for VOACAP paths).
+  operator_grid: JO90AA
+  # Local receive-noise class: QUIET | RURAL | SUBURBAN | URBAN | INDUSTRIAL.
+  noise_class: SUBURBAN
+
+server:
+  telnet:
+    host: 0.0.0.0
+    port: 7300
+    # Maximum concurrent telnet clients (N1MM etc.).
+    max_clients: 100
+    # Per-client outbound queue; when full the OLDEST spot is dropped so a
+    # slow client never introduces lag for everyone else.
+    client_queue_size: 5000
+    # Fixed width of a spot line, excluding CRLF (N2WQ/GoCluster ships 76;
+    # minimum 65). N1MM's AMQ window reads the propagation/quality tags from
+    # fixed columns, so keep this aligned with the N2WQ layout.
+    line_width: 76
+    banner: "RXCluster DX Aggregator"
+  http:
+    host: 0.0.0.0
+    port: 8080
+    # Minimal HTTP endpoint used for container health checks and Prometheus
+    # style metrics. Set enabled: false to disable entirely.
+    enabled: true
+    metrics_enabled: true
+
+sources:
+  rbn:
+    enabled: true
+    host: telnet.reversebeacon.net
+    port: 7000
+    callsign: SQ9ABC
+    reconnect_delay: 5
+    max_reconnect_delay: 120
+  dxsummit:
+    enabled: true
+    api_url: https://dxsummit.fi/api/v1/spots
+    # Polling interval in seconds. DX Summit has no streaming telnet API.
+    poll_interval: 15
+    # Spots requested per poll.
+    limit: 100
+    timeout: 10
+  ve7cc:
+    enabled: true
+    host: dxc.ve7cc.net
+    port: 23
+    callsign: SQ9ABC
+    password: ""
+    # Request a human-only feed ("set/skimmer off") so RBN skimmer spots are
+    # not duplicated from this source.
+    human_only: true
+    reconnect_delay: 5
+    max_reconnect_delay: 120
+  psk_reporter:
+    # PSKReporter digimode reception reports, redistributed over MQTT. The
+    # global feed is very high volume, so this source is disabled by default;
+    # narrow `topic` to the bands/modes you care about before enabling it.
+    enabled: false
+    host: mqtt.pskreporter.info
+    port: 1883
+    # Use TLS (connect to the TLS port, e.g. 1884, when enabling).
+    tls: false
+    # MQTT topic filter. Segments: band/mode/tx/rx/tx_grid/rx_grid/tx_dxcc/rx_dxcc.
+    # Examples: "pskr/filter/v2/20m/FT8/#", "pskr/filter/v2/#".
+    topic: "pskr/filter/v2/#"
+    # MQTT client id; auto-generated from the process id when empty.
+    client_id: ""
+    keepalive: 60
+    reconnect_delay: 5
+    max_reconnect_delay: 120
+
+pipeline:
+  # Bounded intake queue between the sources and the processing pipeline.
+  raw_queue_size: 50000
+  dedup:
+    window_seconds: 30
+    freq_tolerance_khz: 0.1
+  validation:
+    scp_enabled: true
+    patt3ch_enabled: true
+    cty_enabled: true
+    corroboration:
+      enabled: true
+      window_seconds: 120
+      # Number of independent confirmations required for confidence tag "V".
+      min_agree: 3
+      # Levenshtein distance used when detecting busted calls at the same freq.
+      edit_distance: 1
+  enrichment:
+    voacap:
+      enabled: true
+      # Path to the voacapl binary. The container image compiles and installs
+      # it together with the itshfbc data files.
+      engine_path: /usr/local/bin/voacapl
+      # itshfbc data directory created by `makeitshfbc`. Empty => auto-detect
+      # ($HOME/itshfbc, /usr/local/share/voacapl/itshfbc).
+      itshfbc_dir: ""
+      # Precompute the reliability matrix in the background at startup and on
+      # every solar refresh (recommended: makes per-spot lookups instant).
+      precompute: true
+      refresh_hours: 6
+      # Coarse target grid step in degrees used to precompute the matrix.
+      target_grid_degrees: 15
+      modes: [CW, SSB, RTTY, FT8]
+      ssn_default: 100
+      solar_source: https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json
+    tags:
+      confidence: true
+      path: true
+      # Inject an explicit mode token into the comment so N1MM classifies the
+      # spot regardless of its own sub-band settings.
+      mode_token: true
+      # Tag style: "n2wq" (default) or "arcluster" (CT1BOH quality tags).
+      style: n2wq
+
+# Frequency boundaries in kHz. Overlapping or inverted ranges are rejected.
+bands:
+  - { name: 160m, low: 1800,  high: 2000 }
+  - { name: 80m,  low: 3500,  high: 4000 }
+  - { name: 60m,  low: 5330,  high: 5410 }
+  - { name: 40m,  low: 7000,  high: 7300 }
+  - { name: 30m,  low: 10100, high: 10150 }
+  - { name: 20m,  low: 14000, high: 14350 }
+  - { name: 17m,  low: 18068, high: 18168 }
+  - { name: 15m,  low: 21000, high: 21450 }
+  - { name: 12m,  low: 24890, high: 24990 }
+  - { name: 10m,  low: 28000, high: 29700 }
+  - { name: 6m,   low: 50000, high: 54000 }
+
+# Sub-band split (kHz) used to infer the mode of human spots that do not
+# carry an explicit mode token. Below cw_high => CW, above ssb_low => SSB.
+mode_subbands:
+  160m: { cw_high: 1840, ssb_low: 1840 }
+  80m:  { cw_high: 3600, ssb_low: 3600 }
+  40m:  { cw_high: 7040, ssb_low: 7040 }
+  20m:  { cw_high: 14070, ssb_low: 14100 }
+  17m:  { cw_high: 18095, ssb_low: 18110 }
+  15m:  { cw_high: 21070, ssb_low: 21150 }
+  12m:  { cw_high: 24915, ssb_low: 24930 }
+  10m:  { cw_high: 28070, ssb_low: 28300 }
+  6m:   { cw_high: 50100, ssb_low: 50100 }
+
+# Node-level default filter template applied to every new client. Clients may
+# override these with PASS/REJECT commands after login.
+defaults:
+  bands: all
+  modes: all
+  # Confidence symbols to reject by default, e.g. ["?"].
+  reject_confidence: []
+  path: [HIGH, MEDIUM, LOW, UNLIKELY, CLOSED, INSUFFICIENT]
+  # Per-mode minimum SNR in dB, e.g. { CW: 10 }.
+  min_snr: {}
+  switches:
+    beacon: false
+    wwv: true
+    wcy: true
+    announce: true
+    self: false
+    toxic: false
+
+data:
+  scp_file: data/MASTER.SCP
+  cty_file: data/cty.dat
+  patt3ch_file: data/patt3ch.lst
+  # Download/refresh the reference data files at startup and periodically.
+  auto_update: true
+  update_interval_hours: 24
+
+logging:
+  level: INFO
+  format: json
+  file: ""
+
+# Per-callsign settings persistence. When enabled, each operator's filters and
+# session preferences (grid, noise class, dedupe policy) are stored as JSON
+# files and restored on the next login with the same callsign.
+users:
+  enabled: true
+  directory: data/users

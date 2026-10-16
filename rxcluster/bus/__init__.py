@@ -1,0 +1,1 @@
+"""Publish/subscribe fan-out."""

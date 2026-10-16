@@ -1,0 +1,1 @@
+"""Spot sources (RBN, DX Summit, VE7CC, PSKReporter)."""

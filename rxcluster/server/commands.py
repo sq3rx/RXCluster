@@ -1,0 +1,88 @@
+"""Command execution bound to a client session."""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+from ..bus.pubsub import Subscriber
+from ..config import Config
+from ..filters.compiled import CompiledFilter, compile_filter
+from ..filters.model import FilterState
+from ..filters.parser import (
+    CommandHandlers,
+    CommandResult,
+    PostRequest,
+    parse_command,
+)
+from ..pipeline import Pipeline
+
+
+@dataclass(eq=False)
+class ClientSession:
+    callsign: str
+    state: FilterState
+    compiled: CompiledFilter
+    subscriber: Subscriber
+    grid: str = ""
+    noise: str = "SUBURBAN"
+    dedupe_policy: str = "SLOW"
+    paused_until: float = 0.0
+    suppressed: int = 0
+    persist: Callable[[], None] | None = field(default=None, repr=False, compare=False)
+
+    def recompile(self) -> None:
+        self.compiled = compile_filter(self.state, self.callsign, self.grid)
+        self.subscriber.filter = self.compiled
+
+
+def execute_command(
+    line: str, session: ClientSession, cfg: Config, pipeline: Pipeline
+) -> CommandResult:
+    def _set_grid(grid: str) -> None:
+        session.grid = grid
+
+    def _set_noise(noise: str) -> None:
+        session.noise = noise
+
+    def _set_dedupe(policy: str) -> None:
+        session.dedupe_policy = policy
+
+    def _hold() -> str:
+        remaining = session.paused_until - time.monotonic()
+        if remaining > 0:
+            return (
+                f"Live spots paused; {int(remaining) + 1}s remaining, "
+                f"{session.suppressed} spots suppressed."
+            )
+        return "Live spots are running."
+
+    def _resume() -> str:
+        session.paused_until = 0.0
+        return "Live spots resumed."
+
+    def _post(request: PostRequest) -> str:
+        return pipeline.post_manual(session.callsign, request)
+
+    handlers = CommandHandlers(
+        operator_call=session.callsign,
+        operator_grid=session.grid,
+        recent_provider=pipeline.recent,
+        recent_for_provider=pipeline.recent_for,
+        grid_setter=_set_grid,
+        noise_setter=_set_noise,
+        dedupe_setter=_set_dedupe,
+        dedupe_provider=lambda: session.dedupe_policy,
+        prop_provider=pipeline.prop_outlook,
+        whospotsme_provider=pipeline.who_spots_me,
+        post_handler=_post,
+        resume_setter=_resume,
+        hold_provider=_hold,
+    )
+    result = parse_command(line, session.state, handlers)
+    if result.changed:
+        session.recompile()
+        if session.persist is not None:
+            session.persist()
+    return result
