@@ -77,8 +77,12 @@ COPY --from=builder /src/app/config/rxcluster.example.yaml /app/config/rxcluster
 RUN chown rxcluster:rxcluster /app/config/rxcluster.example.yaml
 
 USER rxcluster
-# Creates $HOME/itshfbc with the VOACAP coefficient/antenna/database files.
-RUN makeitshfbc
+# Creates $HOME/itshfbc with the VOACAP coefficient/antenna/database files, then
+# makes it writable for any runtime UID (the container may be started as the
+# host user via PUID/PGID, and voacapl writes scratch files into itshfbc/run).
+RUN makeitshfbc \
+    && chmod 755 "$HOME" \
+    && chmod -R a+rwX "$HOME/itshfbc"
 
 EXPOSE 7300 8080
 

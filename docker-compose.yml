@@ -6,8 +6,9 @@
 # if you need shared caching, long-term metrics or dashboards.
 #
 # The image is built straight from git (see the build args). All mutable state
-# lives in named volumes, so rebuilding or upgrading the image keeps your
-# configuration, reference data, users and logs.
+# stays inside this project directory through relative bind mounts, so rebuilding
+# or upgrading the image keeps your configuration, reference data, users and
+# logs.
 
 services:
   rxcluster:
@@ -19,20 +20,21 @@ services:
     image: rxcluster:latest
     container_name: rxcluster
     restart: unless-stopped
+    # Run as the host user (set PUID/PGID in .env) so the bind-mounted files are
+    # owned by you and no sudo is needed to edit the configuration.
+    user: "${PUID:-1000}:${PGID:-1000}"
     ports:
       - "7300:7300"   # Telnet to N1MM Logger+
       - "8080:8080"   # health / metrics
     volumes:
       # Configuration (may contain callsigns/passwords). Seeded from the bundled
       # example on first start and preserved across image upgrades.
-      - rxcluster-config:/app/config
-      # Persistent reference data (SCP, cty.dat, patt3ch.lst).
-      - rxcluster-data:/app/data
-      # Per-callsign settings (separate volume so it stays writable even when
-      # the reference-data volume is owned by another user).
-      - rxcluster-users:/app/data/users
-      # Logs.
-      - rxcluster-logs:/var/log/rxcluster
+      - ./config:/app/config
+      # Persistent reference data (SCP, cty.dat, patt3ch.lst) and per-callsign
+      # settings under data/users/.
+      - ./data:/app/data
+      # Logs (used when logging.file is set in the configuration).
+      - ./logs:/var/log/rxcluster
     healthcheck:
       test:
         - CMD
@@ -75,11 +77,3 @@ services:
 #   redis-data:
 #   prometheus-data:
 #   grafana-data:
-
-volumes:
-  # Configuration and runtime state persisted across container restarts and
-  # image upgrades.
-  rxcluster-config:
-  rxcluster-data:
-  rxcluster-users:
-  rxcluster-logs:

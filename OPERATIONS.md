@@ -31,14 +31,12 @@ docker compose restart rxcluster     # apply a config change
 docker compose down                  # stop and remove
 ```
 
-Configuration lives in the `rxcluster-config` volume and is preserved across
-image upgrades. Apply a change by exporting it, editing, copying it back and
+Configuration lives in `config/rxcluster.yaml` inside this directory and is
+preserved across image upgrades. Apply a change by editing the file and
 restarting; no rebuild is needed:
 
 ```bash
-docker compose cp rxcluster:/app/config/rxcluster.yaml ./rxcluster.yaml
-# edit ./rxcluster.yaml
-docker compose cp ./rxcluster.yaml rxcluster:/app/config/rxcluster.yaml
+nano config/rxcluster.yaml
 docker compose restart rxcluster
 ```
 
