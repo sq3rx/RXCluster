@@ -136,7 +136,7 @@ class Pipeline:
             return ["Propagation engine disabled."]
         operator_grid = self.enricher.operator_grid
         if len(operator_grid) < 4:
-            return ["Set your grid with SET GRID first."]
+            return ["Propagation needs the node reference grid (station.operator_grid)."]
         grid = self._resolve_target_grid(target)
         if not grid:
             return [f"Could not resolve {target!r} to a grid locator."]

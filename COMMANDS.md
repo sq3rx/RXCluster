@@ -39,7 +39,7 @@ N1MM Logger+ can read the propagation/quality tags from its AMQ window:
 | `SHOW SETTINGS` | Show your current filter selections |
 | `SHOW DEDUPE` | Show your duplicate-suppression policy |
 | `SHOW HOLD` | Show pause state and how many spots were suppressed |
-| `SHOW PROP <call\|prefix\|grid> [band] [mode]` | Hourly propagation outlook (requires `SET GRID`) |
+| `SHOW PROP <call\|prefix\|grid> [band] [mode]` | Hourly propagation outlook using the node reference `station.operator_grid` |
 | `WHOSPOTSME [band]` | Countries that recently spotted your own callsign |
 
 Read-backs (`SHOW FILTER`, `SHOW SETTINGS`, `SHOW PROP`) pause live spots for
@@ -70,7 +70,7 @@ See [FILTERS.md](FILTERS.md) for the full category list and semantics.
 
 | Command | Description |
 | --- | --- |
-| `SET GRID <locator>` | Set your Maidenhead locator (for VOACAP paths and NEARBY) |
+| `SET GRID <locator>` | Set your Maidenhead locator (affects NEARBY filtering and saved preferences; propagation tags use the node reference `station.operator_grid`) |
 | `SET NOISE <class>` | Set your receive-noise class |
 | `SET DEDUPE <FAST\|MED\|SLOW>` | Duplicate-suppression policy (session preference) |
 | `PAUSE [seconds]` | Pause live spots (default 30 s, max 300) |

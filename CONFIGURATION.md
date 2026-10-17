@@ -24,8 +24,8 @@ Validation is fail-fast: overlapping or inverted band ranges, unknown bands in
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `callsign` | `N0CALL` | Callsign used for source login and self-spot detection |
-| `operator_grid` | `""` | Maidenhead locator of the operator's QTH (VOACAP paths) |
+| `callsign` | `N0CALL` | Node callsign; shown in the startup log only. Source logins use `sources.*.callsign`; self-spot detection uses the client's callsign |
+| `operator_grid` | `""` | Node reference Maidenhead locator for VOACAP `PATH` tags and `SHOW PROP` (node-wide, not per-client) |
 | `noise_class` | `SUBURBAN` | `QUIET`/`RURAL`/`SUBURBAN`/`URBAN`/`INDUSTRIAL` |
 
 ### `server.telnet`
@@ -163,7 +163,9 @@ runtime with `PASS`/`REJECT`). See [FILTERS.md](FILTERS.md).
 
 Per-callsign settings persistence. When enabled, each operator's filter
 selections plus grid, noise class and dedupe policy are stored as JSON files and
-restored on the next login with the same callsign (no authentication).
+restored on the next login with the same callsign (no authentication). A record
+is written only when a mutating command is handled; a plain login that changes
+nothing writes no file.
 
 | Key | Default | Description |
 | --- | --- | --- |

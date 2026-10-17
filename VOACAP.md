@@ -101,8 +101,9 @@ pipeline:
       solar_source: https://services.swpc.noaa.gov/json/solar-cycle/observed-solar-cycle-indices.json
 ```
 
-`station.operator_grid` must be set for predictions to be produced; without it
-every spot is classified `INSUFFICIENT`.
+`station.operator_grid` must be set for predictions to be produced; it is the
+node reference QTH used for all clients, so without it every spot is classified
+`INSUFFICIENT`. Per-client `SET GRID` does not change propagation tags.
 
 ## Accuracy disclaimer
 

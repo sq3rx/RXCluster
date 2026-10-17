@@ -130,6 +130,71 @@ def test_nearby_without_grid_warns():
     assert "SET GRID" in result.responses[0]
 
 
+def test_nearby_without_grid_is_inert():
+    state = FilterState()
+    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid=""))
+    compiled = compile_filter(state, "N0CALL", "")
+    assert compiled.allows(make_spot(dx_grid="JO90"))
+    assert compiled.allows(make_spot())
+
+
+def test_nearby_with_invalid_grid_is_inert():
+    state = FilterState()
+    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FOOBAR"))
+    compiled = compile_filter(state, "N0CALL", "FOOBAR")
+    assert compiled.allows(make_spot(dx_grid="JO90"))
+
+
+def test_set_grid_rejects_invalid_locator():
+    captures: list[str] = []
+    result = parse_command(
+        "SET GRID FOOBAR", FilterState(), CommandHandlers(grid_setter=captures.append)
+    )
+    assert not result.changed
+    assert "Invalid Maidenhead locator" in result.responses[0]
+    assert captures == []
+
+
+def test_set_grid_accepts_valid_locator():
+    captures: list[str] = []
+    result = parse_command(
+        "SET GRID jo90aa", FilterState(), CommandHandlers(grid_setter=captures.append)
+    )
+    assert result.changed
+    assert captures == ["JO90AA"]
+
+
+def test_reject_nearby_disables():
+    state = FilterState()
+    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FN31"))
+    assert state.nearby is True
+    parse_command("REJECT NEARBY", state)
+    assert state.nearby is False
+
+
+def test_pass_nearby_false_disables():
+    state = FilterState()
+    result = parse_command("PASS NEARBY FALSE", state, CommandHandlers(operator_grid="FN31"))
+    assert state.nearby is False
+    assert "off" in result.responses[0]
+
+
+def test_self_on_own_call_bypasses_nearby():
+    state = FilterState()
+    parse_command("PASS SELF", state)
+    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FN31"))
+    compiled = compile_filter(state, "K1ABC", "FN31")
+    assert compiled.allows(make_spot(dx_call="K1ABC", dx_grid="JO90"))
+    assert compiled.allows(make_spot(dx_call="K1ABC"))
+
+
+def test_self_off_own_call_rejected():
+    state = FilterState()
+    parse_command("REJECT SELF", state)
+    compiled = compile_filter(state, "K1ABC", "FN31")
+    assert not compiled.allows(make_spot(dx_call="K1ABC"))
+
+
 def test_describe_category_and_full():
     state = FilterState()
     assert "BAND" in describe(state, "band")

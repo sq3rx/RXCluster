@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 import math
+import re
 
 _EARTH_RADIUS_KM = 6371.0
+
+# Maidenhead locator: two A-R fields, two digits, optional two A-X subsquares.
+_GRID_RE = re.compile(r"^[A-R]{2}[0-9]{2}([A-X]{2})?$")
+
+
+def is_valid_grid(grid: str) -> bool:
+    """Return whether ``grid`` is a well-formed 4- or 6-character locator."""
+    return bool(_GRID_RE.match(grid.strip().upper()))
 
 
 def latlon_to_grid(lat: float, lon: float, precision: int = 4) -> str:

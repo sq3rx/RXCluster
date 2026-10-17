@@ -7,9 +7,11 @@
 # layer. Values not present here fall back to the built-in defaults.
 
 station:
-  # Callsign used to log in to the source clusters and shown to clients.
+  # Node callsign; shown in the startup log only. Source logins use
+  # sources.*.callsign and self-spot detection uses the client's callsign.
   callsign: SQ9ABC
-  # Maidenhead locator of the operator's station (used for VOACAP paths).
+  # Node reference Maidenhead locator for VOACAP PATH tags and SHOW PROP
+  # (node-wide, not per-client).
   operator_grid: JO90AA
   # Local receive-noise class: QUIET | RURAL | SUBURBAN | URBAN | INDUSTRIAL.
   noise_class: SUBURBAN
@@ -185,7 +187,8 @@ logging:
 
 # Per-callsign settings persistence. When enabled, each operator's filters and
 # session preferences (grid, noise class, dedupe policy) are stored as JSON
-# files and restored on the next login with the same callsign.
+# files and restored on the next login with the same callsign. A record is
+# written only when a mutating command is handled, not on a plain login.
 users:
   enabled: true
   directory: data/users

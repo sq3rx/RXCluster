@@ -11,7 +11,7 @@ import fnmatch
 import re
 from collections.abc import Hashable
 
-from ..grid import grid_distance_km
+from ..grid import distance_km, grid_to_latlon
 from ..models import SourceType, Spot, SpotKind
 from .model import EXACT_CATEGORIES, FilterState
 
@@ -50,6 +50,7 @@ class CompiledFilter:
         "_switches",
         "_operator",
         "_operator_grid",
+        "_operator_pos",
         "_nearby",
     )
 
@@ -73,6 +74,9 @@ class CompiledFilter:
         self._switches = dict(state.switches)
         self._operator = operator_call.upper()
         self._operator_grid = operator_grid.strip().upper()
+        self._operator_pos = (
+            grid_to_latlon(self._operator_grid) if self._operator_grid else None
+        )
         self._nearby = bool(state.nearby)
 
     # -- category value extraction ----------------------------------------
@@ -130,14 +134,17 @@ class CompiledFilter:
 
     # -- NEARBY ------------------------------------------------------------
     def _nearby_pass(self, spot: Spot) -> bool:
-        if len(self._operator_grid) < 4:
-            return False
+        # Without a valid operator grid NEARBY cannot be evaluated, so it stays
+        # inert rather than black-holing every spot.
+        if self._operator_pos is None:
+            return True
         radius = NEARBY_RADIUS_LOW_KM if spot.band in LOW_BANDS else NEARBY_RADIUS_KM
+        op_lat, op_lon = self._operator_pos
         for grid in (spot.dx_grid, spot.spotter_grid):
-            if not grid:
+            target = grid_to_latlon(grid) if grid else None
+            if target is None:
                 continue
-            dist = grid_distance_km(self._operator_grid, grid)
-            if dist is not None and dist <= radius:
+            if distance_km(op_lat, op_lon, target[0], target[1]) <= radius:
                 return True
         return False
 
@@ -163,6 +170,10 @@ class CompiledFilter:
         if self._operator and not switches.get("self", False):
             if spot.dx_call.upper() == self._operator:
                 return False
+        # Own callsign stays visible when SELF is on, regardless of NEARBY.
+        if self._operator and switches.get("self", False):
+            if spot.dx_call.upper() == self._operator:
+                return True
 
         if self._nearby and not self._nearby_pass(spot):
             return False

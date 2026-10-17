@@ -84,7 +84,7 @@ scripted client and publish a burst through `SpotBus`. A useful target is
 
 ### VOACAP path symbols are blank
 
-- Set `station.operator_grid` and `SET GRID` for the client.
+- Set the node reference `station.operator_grid` for `PATH` tags; `SET GRID` affects only NEARBY.
 - The target grid may be unknown (missing `cty.dat` or no country match).
 
 ### Reference data missing

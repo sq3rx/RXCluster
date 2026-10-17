@@ -49,10 +49,16 @@ as toxic (fail-open when nothing is classified).
 ## NEARBY
 
 `PASS NEARBY ON` (requires `SET GRID`) keeps only spots where either the DX
-station or the spotter is near your grid. The radius is broader on 160 m, 80 m
-and 60 m. While NEARBY is active the geography categories (`DXCONT`/`DECONT`,
-`DXZONE`/`DEZONE`, `DXDXCC`/`DEDXCC`, `DXGRID2`/`DEGRID2`) are suspended; their
-rules are retained and restored by `PASS NEARBY OFF`.
+station or the spotter is near your grid: within 700 km, or 1500 km on 160 m,
+80 m and 60 m. While NEARBY is active the geography categories
+(`DXCONT`/`DECONT`, `DXZONE`/`DEZONE`, `DXDXCC`/`DEDXCC`, `DXGRID2`/`DEGRID2`)
+are suspended; their rules are retained and restored by `PASS NEARBY OFF`.
+
+NEARBY is inert (no spots removed) until a valid grid is set: `SET GRID` rejects
+malformed locators, and enabling NEARBY without a grid keeps the full feed with
+a reminder. Once a grid is set, a spot with neither a DX grid nor a spotter grid
+cannot be proven near and is therefore dropped, as is any spot outside the
+radius. `REJECT NEARBY` (or `PASS NEARBY OFF`) switches it back off.
 
 ## Examples
 
@@ -125,8 +131,10 @@ When `users.enabled` is set (default), the settings of every operator are saved
 to `data/users/<CALL>.json` and restored automatically the next time the same
 callsign logs in. This covers all `PASS`/`REJECT` selections, `MINSNR`,
 `NEARBY`, the feature switches, and the session preferences `SET GRID`,
-`SET NOISE` and `SET DEDUPE`. Changes are written as soon as a mutating command
-is handled.
+`SET NOISE` and `SET DEDUPE`. A record is written as soon as a mutating command
+is handled; a plain login that changes nothing creates no file. Note that the
+saved `SET GRID` only affects the per-client NEARBY filter — propagation `PATH`
+tags and `SHOW PROP` always use the node reference `station.operator_grid`.
 
 Persistence is keyed solely on the callsign typed at the login prompt; the DX
 cluster protocol has no authentication, so treat the stored settings as a

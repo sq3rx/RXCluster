@@ -10,6 +10,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from ..grid import is_valid_grid
 from ..models import Mode
 from ..validate.patterns import is_valid_shape
 from .compiled import describe
@@ -186,10 +187,16 @@ def _parse_pass_reject(
         )
 
     if token == "NEARBY":
-        value = rest[0].upper() if rest else "ON"
-        on = value not in ("OFF", "NO", "0")
+        # PASS enables NEARBY, REJECT disables it; an explicit ON/OFF token wins.
+        on = verb == "PASS"
+        if rest:
+            value = rest[0].upper()
+            if value in ("OFF", "NO", "0", "FALSE"):
+                on = False
+            elif value in ("ON", "YES", "1", "TRUE"):
+                on = True
         state.set_nearby(on)
-        if on and len(h.operator_grid.strip()) < 4:
+        if on and not is_valid_grid(h.operator_grid):
             return CommandResult(
                 handled=True,
                 changed=True,
@@ -255,9 +262,18 @@ def _parse_set(args: list[str], state: FilterState, h: CommandHandlers) -> Comma
                 handled=True, responses=[f"Grid: {h.operator_grid or 'not set'}"]
             )
         grid = rest[0].upper()
+        if not is_valid_grid(grid):
+            return CommandResult(
+                handled=True,
+                responses=["Invalid Maidenhead locator; example JO90AA."],
+            )
         if h.grid_setter is not None:
             h.grid_setter(grid)
-        return CommandResult(handled=True, changed=True, responses=[f"Grid set to {grid}."])
+        return CommandResult(
+            handled=True,
+            changed=True,
+            responses=[f"Grid set to {grid} (NEARBY and saved preferences)."],
+        )
 
     if sub == "NOISE":
         if not rest:
