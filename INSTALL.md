@@ -13,13 +13,17 @@
 
 ## Docker (recommended)
 
-1. Set the host user/group the container should run as (so files in `./config`,
-   `./data` and `./logs` are owned by you and need no `sudo` to edit):
+1. Set the runtime user/group in `.env`. The entrypoint starts as root, gives
+   ownership of `./config`, `./data` and `./logs` to this user, then drops
+   privileges (so it works even if the directories are root-owned):
 
    ```bash
    cp .env.example .env
    sed -i "s/^PUID=.*/PUID=$(id -u)/; s/^PGID=.*/PGID=$(id -g)/" .env
    ```
+
+   On a root-based install you can instead leave `PUID=0` and `PGID=0` to keep
+   running as root.
 
 2. Build and start. The image is built straight from git and the configuration
    is seeded automatically from the bundled example on first start:
@@ -47,6 +51,15 @@ lives inside this directory through relative bind mounts, so
 `docker compose up --build` picks up new image versions without touching your
 settings. To build from a different branch or tag, override `RXCLUSTER_REF`
 (and optionally `RXCLUSTER_REPO`) under the service's `build.args`.
+
+Paths such as `/app/config` are container paths only; they never exist on the
+host. The bind mounts map them into this project directory:
+
+| Host (inside `RXCluster/`) | Container |
+| --- | --- |
+| `./config` | `/app/config` |
+| `./data` | `/app/data` |
+| `./logs` | `/var/log/rxcluster` |
 
 ## Local installation (Python)
 

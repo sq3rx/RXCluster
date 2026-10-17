@@ -9,6 +9,16 @@
 # stays inside this project directory through relative bind mounts, so rebuilding
 # or upgrading the image keeps your configuration, reference data, users and
 # logs.
+#
+# Paths like /app/config exist ONLY inside the container. The host side of each
+# bind mount is the relative path in this directory:
+#
+#   host (inside RXCluster/)   ->   container
+#   ./config                   ->   /app/config
+#   ./data                     ->   /app/data
+#   ./logs                     ->   /var/log/rxcluster
+#
+# Nothing is written outside the RXCluster directory on the host.
 
 services:
   rxcluster:
@@ -20,9 +30,12 @@ services:
     image: rxcluster:latest
     container_name: rxcluster
     restart: unless-stopped
-    # Run as the host user (set PUID/PGID in .env) so the bind-mounted files are
-    # owned by you and no sudo is needed to edit the configuration.
-    user: "${PUID:-1000}:${PGID:-1000}"
+    # The entrypoint starts as root, fixes the ownership of the bind-mounted
+    # directories and drops to PUID:PGID (set them in .env). Use PUID=0/PGID=0
+    # to keep running as root.
+    environment:
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
     ports:
       - "7300:7300"   # Telnet to N1MM Logger+
       - "8080:8080"   # health / metrics

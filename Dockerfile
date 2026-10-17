@@ -2,14 +2,17 @@
 #
 # RXCluster container image.
 #
-# The build is self-contained: sources are cloned straight from git (see the
-# RXCLUSTER_REPO/RXCLUSTER_REF build args) and the `voacapl` VOACAP engine plus
-# its `itshfbc` data files are compiled in, so propagation enrichment works out
-# of the box with no external VOACAP setup.
+# The build is self-contained: the application sources are cloned straight from
+# git (see the RXCLUSTER_REPO/RXCLUSTER_REF build args) and the `voacapl` VOACAP
+# engine plus its `itshfbc` data files are compiled in, so propagation
+# enrichment works out of the box with no external VOACAP setup.
 #
-# The runtime image ships only the example configuration under /app/config; the
-# entrypoint seeds /app/config/rxcluster.yaml from it on first start. Mount a
-# volume at /app/config and the settings survive image upgrades.
+# The runtime image ships only the example configuration under /app/config (a
+# container path; on the host this is RXCluster/config). The entrypoint seeds
+# /app/config/rxcluster.yaml from it on first start, fixes the ownership of the
+# bind-mounted directories and drops to the PUID/PGID runtime user, so settings
+# survive image upgrades. Nothing is written outside the project directory on
+# the host.
 
 # ---- Builder: compile voacapl and install the application -----------------
 FROM python:3.12-slim AS builder
@@ -57,14 +60,17 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HOME=/home/rxcluster
 
-# Fortran runtime required by the voacapl binary.
+# libgfortran5 is the Fortran runtime required by voacapl; gosu lets the
+# entrypoint drop from root to the PUID/PGID runtime user.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgfortran5 \
+    && apt-get install -y --no-install-recommends libgfortran5 gosu \
     && rm -rf /var/lib/apt/lists/*
 
-# Carry over the Python environment (app + deps + entrypoint) and voacapl.
+# Carry over the Python environment (app + deps) and voacapl.
 COPY --from=builder /usr/local /usr/local
-COPY --from=builder /src/app/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+# Entrypoint is taken from the build context (this repository checkout).
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 WORKDIR /app
@@ -76,13 +82,17 @@ RUN mkdir -p /app/config /app/data/users /var/log/rxcluster \
 COPY --from=builder /src/app/config/rxcluster.example.yaml /app/config/rxcluster.example.yaml
 RUN chown rxcluster:rxcluster /app/config/rxcluster.example.yaml
 
+# Create the VOACAP itshfbc data once, as the unprivileged build user, then make
+# it usable by any runtime UID (the container runs as PUID/PGID and voacapl
+# writes scratch files into itshfbc/run).
 USER rxcluster
-# Creates $HOME/itshfbc with the VOACAP coefficient/antenna/database files, then
-# makes it writable for any runtime UID (the container may be started as the
-# host user via PUID/PGID, and voacapl writes scratch files into itshfbc/run).
 RUN makeitshfbc \
     && chmod 755 "$HOME" \
     && chmod -R a+rwX "$HOME/itshfbc"
+
+# The entrypoint starts as root so it can fix bind-mount ownership, then drops
+# to PUID/PGID.
+USER root
 
 EXPOSE 7300 8080
 
