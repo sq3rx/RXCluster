@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-10-17
+
+### Fixed
+
+- `cty.dat` continuation lines are now parsed correctly (commas/semicolons,
+  `=` overrides and `(...)`/`[...]` annotations). Previously only each entity's
+  primary prefix was registered, so many callsigns (`W*`, `N*`, `SQ*`, ...)
+  never resolved to a country; `DXCONT`/`DECONT`, `DXDXCC`/`DEDXCC`, CQ-zone and
+  grid enrichment therefore did nothing for those spots.
+
 ## [0.2.1] - 2026-10-17
 
 ### Fixed

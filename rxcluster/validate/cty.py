@@ -77,11 +77,12 @@ class CtyDatabase:
                 continue
             if current is None:
                 continue
-            # Continuation line: prefixes before the first ':'.
-            token_part = raw.split(":", 1)[0]
-            for token in token_part.split():
-                prefix = token.lstrip("=").strip()
-                prefix = re.sub(r"\(.*?\)", "", prefix).upper()
+            # Continuation line: prefixes separated by commas and terminated by
+            # a semicolon, e.g. "AA,AB,...,K,N,W,=4U1WB(5)[8],...;" with the
+            # occasional '=' override and "(...)"/"[...]" annotation.
+            for token in re.split(r"[,;\s]+", raw):
+                prefix = token.lstrip("=").strip().upper()
+                prefix = re.sub(r"[\(\[]([^\)\]]*)[\)\]]", "", prefix).strip()
                 if prefix:
                     self._add_prefix(prefix, current)
 

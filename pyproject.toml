@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rxcluster"
-version = "0.2.1"
+version = "0.2.2"
 description = "High-performance DX Cluster aggregator/proxy serving an enriched spot stream over Telnet for N1MM Logger+."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -1,4 +1,7 @@
 from rxcluster.config import ValidationConfig
+from rxcluster.filters.compiled import compile_filter
+from rxcluster.filters.model import FilterState
+from rxcluster.filters.parser import parse_command
 from rxcluster.models import Confidence, Source, SourceType, Spot
 from rxcluster.validate.corroboration import Corroborator, levenshtein
 from rxcluster.validate.cty import CtyDatabase
@@ -91,3 +94,49 @@ def test_corroborator_prunes_stale_buckets():
     # After the window elapses, a new spot triggers a full sweep of stale data.
     corr.evaluate(make_spot("K1ABC", freq=30000.0), now=1000.0)
     assert len(corr._by_freq) == 1
+
+
+_CTY = (
+    "United States:            05:  08:  NA:   37.60:    91.87:     5.0:  K:\n"
+    "    AA,AB,AK,K,N,W,=4U1WB(5)[8],=AA0BY(3)[6];\n"
+    "Poland:                   15:  28:  EU:   52.28:   -18.67:    -1.0:  SP:\n"
+    "    3Z,HF,SN,SO,SP,SQ,SR;\n"
+)
+
+
+def _load_cty(tmp_path):
+    path = tmp_path / "cty.dat"
+    path.write_text(_CTY, encoding="utf-8")
+    cty = CtyDatabase()
+    cty.load(str(path))
+    return cty
+
+
+def test_cty_continuation_prefixes(tmp_path):
+    cty = _load_cty(tmp_path)
+    # Prefixes from continuation lines (W, SQ, ...) must resolve, not just the
+    # header's primary prefix (K, SP).
+    assert cty.lookup("W3LPR").continent == "NA"
+    assert cty.lookup("N0CALL").continent == "NA"
+    assert cty.lookup("4U1WB").continent == "NA"  # '=' override prefix
+    assert cty.lookup("SQ9ABC").continent == "EU"
+
+
+def test_dxcont_decont_filters_after_geography(tmp_path):
+    cty = _load_cty(tmp_path)
+    validator = Validator(ValidationConfig(), ScpDatabase(), cty)
+
+    spot = make_spot("SQ9ABC", spotter="W3LPR")
+    validator.process(spot)
+    assert spot.continent == "EU"
+    assert spot.spotter_continent == "NA"
+
+    state = FilterState()
+    parse_command("REJECT DXCONT ALL", state)
+    parse_command("PASS DXCONT EU", state)
+    assert compile_filter(state).allows(spot)  # DX is EU
+
+    state = FilterState()
+    parse_command("REJECT DECONT ALL", state)
+    parse_command("PASS DECONT EU", state)
+    assert not compile_filter(state).allows(spot)  # spotter is NA
