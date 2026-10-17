@@ -122,6 +122,17 @@ def test_cty_continuation_prefixes(tmp_path):
     assert cty.lookup("SQ9ABC").continent == "EU"
 
 
+def test_cty_tolerates_blank_lines(tmp_path):
+    # CR-CR-LF line endings inject a blank line after every line; the
+    # continuation prefixes must still be attributed to the right entity.
+    path = tmp_path / "cty.dat"
+    path.write_bytes(_CTY.replace("\n", "\r\r\n").encode("utf-8"))
+    cty = CtyDatabase()
+    cty.load(str(path))
+    assert cty.lookup("W3LPR").continent == "NA"
+    assert cty.lookup("SQ9ABC").continent == "EU"
+
+
 def test_dxcont_decont_filters_after_geography(tmp_path):
     cty = _load_cty(tmp_path)
     validator = Validator(ValidationConfig(), ScpDatabase(), cty)

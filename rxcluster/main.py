@@ -75,6 +75,13 @@ def _load_reference_data(cfg: Config) -> tuple[ScpDatabase, CtyDatabase]:
     try:
         if cty.load(cfg.data.cty_file):
             log.info("cty.dat loaded: %d prefixes", len(cty))
+            if len(cty) < 1000:
+                log.warning(
+                    "cty.dat looks malformed (%d prefixes); geography filters "
+                    "(DXCONT/DECONT, DXDXCC/DEDXCC) and CQ-zone/grid enrichment "
+                    "will be wrong - re-download the file",
+                    len(cty),
+                )
     except FileNotFoundError:
         log.warning("cty file %s not found; geography enrichment disabled", cfg.data.cty_file)
     return scp, cty

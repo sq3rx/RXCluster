@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `cty.dat` parsing now tolerates spurious blank lines (e.g. files saved with
+  CR-CR-LF line endings). Previously a blank line after an entity header
+  dropped all of its continuation prefixes, so geography filters
+  (`DXCONT`/`DECONT`, `DXDXCC`/`DEDXCC`) and CQ-zone/grid enrichment silently
+  did nothing.
+
+### Added
+
+- Startup warning when `cty.dat` loads suspiciously few prefixes, pointing at a
+  missing or malformed reference file.
+
 ## [0.2.2] - 2026-10-17
 
 ### Fixed

@@ -57,10 +57,13 @@ class CtyDatabase:
     def _parse(self, fh) -> None:
         current: CtyEntity | None = None
         for raw in fh:
+            # Blank lines separate entities but may also be spurious (e.g. files
+            # with CR-CR-LF line endings). Do NOT clear ``current`` here, or the
+            # continuation prefixes that follow would be dropped; a new header
+            # replaces ``current`` anyway.
             if not raw.strip():
-                current = None
                 continue
-            header = _HEADER_RE.match(raw.rstrip("\n"))
+            header = _HEADER_RE.match(raw.rstrip("\r\n"))
             if header:
                 lat = float(header.group("lat"))
                 lon = float(header.group("lon"))
