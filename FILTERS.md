@@ -8,17 +8,23 @@ are written to a client, which reduces telnet traffic and CPU load on N1MM.
 
 - Within a category, **REJECT wins over PASS**.
 - Different categories are combined with logical **AND**.
-- `REJECT <CATEGORY> ALL` restricts the category to nothing; a following
-  `PASS <CATEGORY> a,b` re-adds values.
-- `PASS <CATEGORY> ALL` clears the category's restrictions.
-- `MODE` naturally preserves visibility for modes that are not named:
-  `PASS MODE CW` keeps every other mode visible; use
-  `REJECT MODE ALL` + `PASS MODE CW` to show only CW.
+- `PASS <CATEGORY> <values>` adds values to the category's allow-set. A
+  category starts **unrestricted**, so a lone `PASS` leaves it unrestricted.
+  To show only selected values use `REJECT <CATEGORY> ALL` first and then
+  `PASS <CATEGORY> a,b`; `PASS <CATEGORY> ALL` clears the restriction again.
+  This applies to every exact category, e.g. band:
+  `REJECT BAND ALL` + `PASS BAND 20,40`, or mode:
+  `REJECT MODE ALL` + `PASS MODE CW`.
+- `REJECT <CATEGORY> <values>` blacklists values without restricting the rest.
 - `COMMENT` matches literal, case-insensitive substrings; any allowed phrase
   matches, a rejected phrase always wins.
 - `MINSNR` applies a per-mode threshold and **exempts human reports and spots
-  without an SNR**.
+  without an SNR**. `REJECT MINSNR <MODE>` (or `PASS MINSNR <MODE> ALL`) clears
+  the threshold.
 - `EVENT` uses key presence: untagged spots always pass.
+
+Values for `DXDXCC`/`DEDXCC` (entity names) and `COMMENT` (phrases) may contain
+spaces; separate multiple values with commas, e.g. `REJECT COMMENT QRT,QSY`.
 
 ## Categories
 

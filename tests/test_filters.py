@@ -76,6 +76,19 @@ def test_call_pattern():
     assert compiled.allows(make_spot(spotter="DL1ABC"))
 
 
+def test_call_pattern_whitelist_and_all():
+    state = FilterState()
+    parse_command("REJECT DXCALL ALL", state)
+    parse_command("PASS DXCALL K1*", state)
+    compiled = compile_filter(state)
+    assert compiled.allows(make_spot(dx_call="K1ABC"))
+    assert not compiled.allows(make_spot(dx_call="DL1ABC"))
+
+    parse_command("PASS DXCALL ALL", state)
+    compiled = compile_filter(state)
+    assert compiled.allows(make_spot(dx_call="DL1ABC"))
+
+
 def test_confidence_reject():
     state = FilterState()
     parse_command("REJECT CONFIDENCE ?", state)
@@ -87,3 +100,44 @@ def test_confidence_reject():
 def test_describe_runs():
     state = FilterState()
     assert "BAND" in describe(state)
+
+
+def test_event_reject_and_whitelist():
+    state = FilterState()
+    parse_command("REJECT EVENT POTA", state)
+    compiled = compile_filter(state)
+    assert not compiled.allows(make_spot(comment="POTA activation"))
+    assert compiled.allows(make_spot(comment="plain report"))
+
+    state = FilterState()
+    parse_command("REJECT EVENT ALL", state)
+    parse_command("PASS EVENT SOTA", state)
+    compiled = compile_filter(state)
+    assert compiled.allows(make_spot(comment="SOTA summit"))
+    assert compiled.allows(make_spot(comment="plain"))  # untagged always passes
+    assert not compiled.allows(make_spot(comment="POTA activation"))
+
+
+def test_dxdxcc_multiword_entity():
+    state = FilterState()
+    parse_command("REJECT DXDXCC United States", state)
+    compiled = compile_filter(state)
+    assert not compiled.allows(make_spot(dxcc="United States"))
+    assert compiled.allows(make_spot(dxcc="Germany"))
+
+
+def test_comment_multiword_phrases():
+    state = FilterState()
+    parse_command("REJECT COMMENT QRT,test me", state)
+    compiled = compile_filter(state)
+    assert not compiled.allows(make_spot(comment="please QRT now"))
+    assert not compiled.allows(make_spot(comment="test me"))
+    assert compiled.allows(make_spot(comment="cq contest"))
+
+
+def test_reject_minsnr_clears_threshold():
+    state = FilterState()
+    parse_command("PASS MINSNR CW 10", state)
+    assert state.min_snr == {"CW": 10}
+    parse_command("REJECT MINSNR CW", state)
+    assert state.min_snr == {}

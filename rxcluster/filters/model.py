@@ -87,6 +87,10 @@ class FilterState:
             self.comment_allow.extend(v.lower() for v in values)
             return
         if category in PATTERN_CATEGORIES:
+            if any(v.lower() == "all" for v in values):
+                self.allow_patterns[category] = None
+                self.reject_patterns[category].clear()
+                return
             current = self.allow_patterns[category]
             self.allow_patterns[category] = (list(current) if current else []) + values
             return
@@ -106,6 +110,10 @@ class FilterState:
             self.comment_reject.extend(v.lower() for v in values)
             return
         if category in PATTERN_CATEGORIES:
+            if any(v.lower() == "all" for v in values):
+                self.allow_patterns[category] = []
+                self.reject_patterns[category] = []
+                return
             self.reject_patterns[category].extend(values)
             return
         lowered = [v.lower() for v in values]

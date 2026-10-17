@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-17
+
+### Fixed
+
+- `EVENT` filtering (`PASS`/`REJECT EVENT`) now works. Event tokens were
+  compared case-sensitively, so the filter never matched; a
+  `REJECT EVENT ALL` + `PASS EVENT <tag>` whitelist was also inverted.
+- `DXDXCC`/`DEDXCC` now accept multi-word entity names (e.g.
+  `REJECT DXDXCC United States`); values are split on commas, not spaces.
+- `COMMENT` phrases may contain spaces (e.g. `REJECT COMMENT test me`); use
+  commas to separate multiple phrases.
+- `REJECT MINSNR <MODE>` now clears the threshold; previously the `REJECT` verb
+  was ignored and it silently set one.
+- `PASS`/`REJECT DXCALL|DECALL ALL` now clears/restricts the category like every
+  other category; `ALL` was previously treated as a literal wildcard.
+
 ## [0.2.0] - 2026-10-17
 
 ### Added

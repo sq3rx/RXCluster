@@ -95,14 +95,124 @@ keep-alive and ignored.
 
 ## Examples
 
+### Contest CQ WW: 20/40 m CW only, good paths
+
 ```text
 login: SQ9ABC
 *** Connected as SQ9ABC. Type HELP for commands, BYE to disconnect.
+
+# Only 20 m and 40 m (restrict, then re-add)
 REJECT BAND ALL
-REJECT BAND 20m,40m
+PASS BAND 20,40
+
+# Only CW
 REJECT MODE ALL
 PASS MODE CW
+
+# Drop weak/likely-fake spots and paths that will not work
+REJECT CONFIDENCE ?,B
+REJECT PATH UNLIKELY,CLOSED
+
+# Require a decent skimmer SNR on CW (human reports and spots without SNR are exempt)
 PASS MINSNR CW 10
-SET GRID JO90AA
-SHOW FILTER
+
+SHOW FILTER FULL
 ```
+
+### Watching a station, a spotter or a region
+
+```text
+# Only spots of calls starting with K1 (wildcards are case-insensitive)
+REJECT DXCALL ALL
+PASS DXCALL K1*
+
+# Ignore a noisy spotter
+REJECT DECALL W3LPL
+
+# Only EU DX in CQ zone 14 with a JO grid field
+REJECT DXCONT ALL
+PASS DXCONT EU
+REJECT DXZONE ALL
+PASS DXZONE 14
+REJECT DXGRID2 ALL
+PASS DXGRID2 JO
+
+# Whole countries (multi-word entity names are allowed; separate several with commas)
+REJECT DXDXCC North Korea
+REJECT DEDXCC United States,Canada
+```
+
+### Comment and event filters
+
+```text
+# Require a phrase and ban others (phrases may contain spaces)
+PASS COMMENT CQ
+REJECT COMMENT QRT,test me
+
+# Only park / summit / field activity
+REJECT EVENT ALL
+PASS EVENT POTA,SOTA,WWFF
+```
+
+### Local ("nearby") mode
+
+```text
+SET GRID JO90AA         # validate a Maidenhead locator first
+PASS NEARBY ON          # 700 km, or 1500 km on 160/80/60 m
+SHOW FILTER
+PASS NEARBY OFF         # back to the full feed
+```
+
+### Feature switches
+
+```text
+REJECT BEACON           # hide NCDXF/beacon spots
+REJECT TOXIC            # hide human spots flagged toxic
+PASS SELF               # show spots of your own callsign
+REJECT WWV              # hide WWV bulletin traffic
+```
+
+### Session preferences
+
+```text
+SET DEDUPE FAST         # tighter per-client duplicate window (10 s)
+SET DEDUPE SLOW         # 30 s (default)
+SHOW DEDUPE
+SET NOISE URBAN         # receive-noise class used for VOACAP
+```
+
+### Posting, querying and pausing
+
+```text
+DX 7001.0 K1ABC CW up 599      # post a spot you heard
+SHOW DX 20                     # last 20 spots matching your filters
+SHOW DX K1ABC 5                # last 5 spots of K1ABC
+SHOW PROP K1ABC 20m CW         # 24 h propagation outlook
+WHOSPOTSME 20m                 # countries that recently spotted you
+PAUSE                          # pause the live feed for 30 s
+...read the output...
+RESUME
+```
+
+### CC Cluster / DX Spider aliases
+
+```text
+SET/DX                  # enable spots
+SET/SKIMMER OFF         # hide skimmer-sourced spots
+SET/NOFT8               # hide FT8
+ACCEPT/SPOTS            # continue streaming
+```
+
+### Inspecting the result
+
+```text
+SHOW FILTER             # concise summary
+SHOW FILTER FULL        # includes feature switches and MINSNR
+SHOW FILTER BAND        # a single category
+SHOW SETTINGS
+```
+
+> All commands are case-insensitive. A category starts **unrestricted**, so a
+> lone `PASS <CATEGORY> <values>` adds to the allow-set without removing
+> anything; use `REJECT <CATEGORY> ALL` first to show only selected values. See
+> [FILTERS.md](FILTERS.md) for the full semantics.

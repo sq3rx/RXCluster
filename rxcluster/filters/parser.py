@@ -38,6 +38,10 @@ _CATEGORY_ALIASES: dict[str, str] = {
     "EVENT": "event",
 }
 
+# Categories whose values may contain spaces (DXCC entity names, comment
+# phrases); these are split on commas only, not on whitespace.
+_GROUPED_CATEGORIES = frozenset({"dxdxcc", "dedxcc", "comment"})
+
 # Characters allowed in a manually posted spot comment.
 _POST_COMMENT_RE = re.compile(r"^[A-Za-z0-9 /#@\-.,*?_]*$")
 
@@ -89,6 +93,16 @@ def _split_values(args: list[str]) -> list[str]:
         for value in chunk.replace(",", " ").split():
             values.append(value)
     return values
+
+
+def _split_grouped(args: list[str]) -> list[str]:
+    """Split comma-separated values while preserving spaces inside each value.
+
+    Used for free-text categories (DXCC entity names, COMMENT phrases) where a
+    value may legitimately contain spaces, e.g. ``United States``.
+    """
+    joined = " ".join(args)
+    return [value.strip() for value in joined.split(",") if value.strip()]
 
 
 def _normalize_band(value: str) -> str:
@@ -213,7 +227,8 @@ def _parse_pass_reject(
             responses=[f"{verb}: unknown filter category {token!r}. Type HELP PASS."],
         )
 
-    values = _normalize_values(category, _split_values(rest))
+    raw = _split_grouped(rest) if category in _GROUPED_CATEGORIES else _split_values(rest)
+    values = _normalize_values(category, raw)
     if not values:
         return CommandResult(handled=True, responses=[f"{verb} {token}: missing values."])
 
@@ -227,11 +242,22 @@ def _parse_pass_reject(
 
 
 def _parse_minsnr(verb: str, args: list[str], state: FilterState) -> CommandResult:
-    if len(args) < 2:
+    if not args:
         return CommandResult(
             handled=True, responses=["Usage: PASS MINSNR <MODE> <dB|ALL>"]
         )
     modes = [m.upper() for m in _split_values([args[0]])]
+    # REJECT clears the threshold; an explicit ALL/NONE on PASS does the same.
+    if verb == "REJECT":
+        for mode in modes:
+            state.set_min_snr(mode, None)
+        return CommandResult(
+            handled=True, changed=True, responses=[f"MINSNR {','.join(modes)} cleared."]
+        )
+    if len(args) < 2:
+        return CommandResult(
+            handled=True, responses=["Usage: PASS MINSNR <MODE> <dB|ALL>"]
+        )
     threshold_token = args[1].upper()
     if threshold_token in ("ALL", "NONE"):
         for mode in modes:

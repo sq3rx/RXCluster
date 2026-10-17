@@ -113,7 +113,7 @@ class CompiledFilter:
     @staticmethod
     def _events(spot: Spot) -> frozenset[str]:
         comment = spot.comment.upper()
-        return frozenset(e for e in KNOWN_EVENTS if e in comment)
+        return frozenset(e.lower() for e in KNOWN_EVENTS if e in comment)
 
     def _match_patterns(self, patterns: list[re.Pattern[str]] | None, value: str) -> bool:
         if not patterns:
