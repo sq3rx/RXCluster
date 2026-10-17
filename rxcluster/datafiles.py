@@ -19,9 +19,9 @@ log = logging.getLogger(__name__)
 # and may change over time; they can be overridden by placing the files manually
 # in the data directory.
 DEFAULT_URLS: dict[str, str] = {
-    "MASTER.SCP": "https://www.kkn.net/~n6tv/SCP/MASTER.SCP",
+    "MASTER.SCP": "https://supercheckpartial.com/MASTER.SCP",
     "cty.dat": "https://www.country-files.com/cty/cty.dat",
-    "patt3ch.lst": "https://www.reversebeacon.net/patt3ch.lst",
+    "patt3ch.lst": "https://data.reversebeacon.net/downloads/patt3ch/patt3ch.lst",
 }
 
 

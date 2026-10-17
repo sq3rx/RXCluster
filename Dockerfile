@@ -69,6 +69,10 @@ RUN apt-get update \
 # Carry over the Python environment (app + deps) and voacapl.
 COPY --from=builder /usr/local /usr/local
 
+# voacapl ships its itshfbc data under /usr/local/share; the engine writes
+# scratch files into itshfbc/run, so make it writable for the runtime user.
+RUN chmod -R a+rwX /usr/local/share/voacapl/itshfbc 2>/dev/null || true
+
 # Entrypoint is taken from the build context (this repository checkout).
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

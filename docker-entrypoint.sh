@@ -30,6 +30,14 @@ if [ "$(id -u)" = "0" ]; then
     # container work regardless of who owns them on the host.
     chown -R "${PUID}:${PGID}" /app/config /app/data /var/log/rxcluster 2>/dev/null || true
 
+    # voacapl writes scratch files into itshfbc/run; keep both possible itshfbc
+    # locations writable by the runtime user.
+    for d in /home/rxcluster/itshfbc /usr/local/share/voacapl/itshfbc; do
+        if [ -d "${d}" ]; then
+            chmod -R a+rwX "${d}" 2>/dev/null || true
+        fi
+    done
+
     if [ "${PUID}" != "0" ]; then
         if command -v gosu >/dev/null 2>&1; then
             exec gosu "${PUID}:${PGID}" rxcluster "$@"
