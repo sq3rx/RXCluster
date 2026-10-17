@@ -52,6 +52,19 @@ lives inside this directory through relative bind mounts, so
 settings. To build from a different branch or tag, override `RXCLUSTER_REF`
 (and optionally `RXCLUSTER_REPO`) under the service's `build.args`.
 
+Because the application sources are cloned from git **inside** the build,
+Docker would otherwise reuse the cached clone and ignore new commits. To update,
+bump `RXCLUSTER_CACHEBUST` in `.env` so the clone layer is refreshed:
+
+```bash
+git pull
+sed -i "s/^RXCLUSTER_CACHEBUST=.*/RXCLUSTER_CACHEBUST=$(date +%s)/" .env
+docker compose up --build -d
+```
+
+Your configuration, data and logs are preserved (they live in the bind-mounted
+directories).
+
 Paths such as `/app/config` are container paths only; they never exist on the
 host. The bind mounts map them into this project directory:
 

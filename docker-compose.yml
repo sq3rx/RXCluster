@@ -27,6 +27,7 @@ services:
       args:
         RXCLUSTER_REPO: https://github.com/sq3rx/RXCluster.git
         RXCLUSTER_REF: master
+        RXCLUSTER_CACHEBUST: "${RXCLUSTER_CACHEBUST:-1}"
     image: rxcluster:latest
     container_name: rxcluster
     restart: unless-stopped

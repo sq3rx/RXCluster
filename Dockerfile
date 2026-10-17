@@ -19,6 +19,9 @@ FROM python:3.12-slim AS builder
 
 ARG RXCLUSTER_REPO=https://github.com/sq3rx/RXCluster.git
 ARG RXCLUSTER_REF=master
+# Bump this to force Docker to re-run (and re-fetch) the source clone layer;
+# otherwise the cached clone is reused and new commits are not picked up.
+ARG RXCLUSTER_CACHEBUST=1
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -47,7 +50,8 @@ RUN git clone --depth 1 https://github.com/jawatson/voacapl.git /opt/voacapl \
     && rm -rf /opt/voacapl
 
 # Fetch the application sources directly from git.
-RUN git clone --depth 1 --branch "${RXCLUSTER_REF}" "${RXCLUSTER_REPO}" /src/app
+RUN echo "RXCluster source cache-bust: ${RXCLUSTER_CACHEBUST}" \
+    && git clone --depth 1 --branch "${RXCLUSTER_REF}" "${RXCLUSTER_REPO}" /src/app
 
 # Install the application and its Python dependencies into /usr/local.
 RUN pip install --no-cache-dir /src/app
