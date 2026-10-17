@@ -98,8 +98,18 @@ class SourcesConfig(_Base):
 
 
 class DedupConfig(_Base):
-    window_seconds: float = 30.0
+    # Duplicate suppression runs per client (after that client's filter), so the
+    # window is chosen from the client's SET DEDUPE policy. ``window_seconds``
+    # is the fallback used for an unknown policy.
     freq_tolerance_khz: float = 0.1
+    window_seconds: float = 30.0
+    policies: dict[str, float] = Field(
+        default_factory=lambda: {"FAST": 10.0, "MED": 20.0, "SLOW": 30.0}
+    )
+
+    def window_for(self, policy: str) -> float:
+        """Return the dedup window in seconds for a ``SET DEDUPE`` policy."""
+        return self.policies.get(policy.strip().upper(), self.window_seconds)
 
 
 class CorroborationConfig(_Base):

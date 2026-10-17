@@ -14,7 +14,6 @@ from datetime import UTC, datetime
 
 from .bus.pubsub import SpotBus
 from .config import PipelineConfig
-from .dedup.window import DedupWindow
 from .enrich.enricher import Enricher
 from .enrich.voacap.voacapl import BAND_FREQ_INDEX, FREQS_MHZ
 from .models import PATH_SYMBOL, PathClass, Source, SourceType, Spot, SpotKind, SpotStats
@@ -42,7 +41,6 @@ class Pipeline:
         self.bus = bus
         self.line_width = line_width
         self.stats = SpotStats()
-        self.dedup = DedupWindow(cfg.dedup.window_seconds, cfg.dedup.freq_tolerance_khz)
         self._history: deque[tuple[Spot, str]] = deque(maxlen=history_size)
 
     def process(self, spot: Spot) -> bool:
@@ -54,7 +52,8 @@ class Pipeline:
         if spot.kind is not SpotKind.SPOT:
             line = self.enricher.render(spot, self.line_width)
             self._history.append((spot, line))
-            delivered = self.bus.publish(spot, line)
+            delivered, suppressed = self.bus.publish(spot, line)
+            self.stats.deduped += suppressed
             if delivered:
                 self.stats.forwarded += 1
                 return True
@@ -64,10 +63,6 @@ class Pipeline:
         spot.band = self.band_plan.band_for_freq(spot.freq_khz)
         spot.mode = self.band_plan.infer_mode(spot.freq_khz, spot.band, spot.mode)
 
-        if self.dedup.is_duplicate(spot):
-            self.stats.deduped += 1
-            return False
-
         if not self.validator.process(spot):
             self.stats.rejected += 1
             return False
@@ -75,7 +70,8 @@ class Pipeline:
         self.enricher.process(spot)
         line = self.enricher.render(spot, self.line_width)
         self._history.append((spot, line))
-        delivered = self.bus.publish(spot, line)
+        delivered, suppressed = self.bus.publish(spot, line)
+        self.stats.deduped += suppressed
         if delivered:
             self.stats.forwarded += 1
             return True

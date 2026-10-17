@@ -104,8 +104,9 @@ default. Narrow `topic` (e.g. `pskr/filter/v2/20m/FT8/#`) before enabling it.
 | Key | Default | Description |
 | --- | --- | --- |
 | `raw_queue_size` | `50000` | Bounded intake queue size |
-| `dedup.window_seconds` | `30` | Duplicate suppression window |
 | `dedup.freq_tolerance_khz` | `0.1` | Frequency quantization for dedup |
+| `dedup.window_seconds` | `30` | Dedup window fallback for an unknown `SET DEDUPE` policy |
+| `dedup.policies` | `{FAST: 10, MED: 20, SLOW: 30}` | Per-client dedup window (seconds) by `SET DEDUPE` policy |
 | `validation.scp_enabled` | `true` | Use SCP membership |
 | `validation.patt3ch_enabled` | `true` | Use the patt3ch list |
 | `validation.cty_enabled` | `true` | Resolve geography from cty.dat |

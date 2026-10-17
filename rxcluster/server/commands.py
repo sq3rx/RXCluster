@@ -48,6 +48,10 @@ def execute_command(
 
     def _set_dedupe(policy: str) -> None:
         session.dedupe_policy = policy
+        dedup_cfg = cfg.pipeline.dedup
+        session.subscriber.set_dedup_window(
+            dedup_cfg.window_for(policy), dedup_cfg.freq_tolerance_khz
+        )
 
     def _hold() -> str:
         remaining = session.paused_until - time.monotonic()

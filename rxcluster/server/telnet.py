@@ -100,7 +100,14 @@ class TelnetServer:
             dedupe = str(record.get("dedupe", dedupe))
 
         compiled = compile_filter(state, callsign, grid)
-        subscriber = Subscriber(callsign, compiled, tcfg.client_queue_size)
+        dedup_cfg = self.cfg.pipeline.dedup
+        subscriber = Subscriber(
+            callsign,
+            compiled,
+            tcfg.client_queue_size,
+            dedup_window_seconds=dedup_cfg.window_for(dedupe),
+            freq_tolerance_khz=dedup_cfg.freq_tolerance_khz,
+        )
         self.bus.subscribe(subscriber)
 
         session = ClientSession(

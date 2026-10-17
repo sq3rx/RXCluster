@@ -9,6 +9,7 @@ from rxcluster.filters.parser import CommandHandlers, PostRequest, parse_command
 from rxcluster.models import Source, SourceType, Spot
 from rxcluster.parse.freq import BandPlan
 from rxcluster.pipeline import Pipeline
+from rxcluster.server.commands import ClientSession, execute_command
 from rxcluster.validate.cty import CtyDatabase
 from rxcluster.validate.scp import ScpDatabase
 from rxcluster.validate.validator import Validator
@@ -137,3 +138,31 @@ def test_prop_outlook_empirical_fallback():
 def test_prop_outlook_without_grid():
     pipeline, _bus = build_pipeline()
     assert "disabled" in pipeline.prop_outlook("FN42", "20m", "CW")[0].lower()
+
+
+def test_dedup_config_window_for():
+    dedup = Config().pipeline.dedup
+    assert dedup.window_for("fast") == 10.0
+    assert dedup.window_for("SLOW") == 30.0
+    assert dedup.window_for("unknown") == dedup.window_seconds
+
+
+def test_set_dedupe_reconfigures_subscriber_window():
+    cfg = Config()
+    cfg.pipeline.enrichment.voacap.enabled = False
+    band_plan = BandPlan(cfg.band_ranges, cfg.mode_subbands)
+    validator = Validator(cfg.pipeline.validation, ScpDatabase(), CtyDatabase())
+    enricher = Enricher(cfg.pipeline.enrichment, cfg.station.operator_grid)
+    pipeline = Pipeline(cfg.pipeline, band_plan, validator, enricher, SpotBus())
+
+    state = FilterState()
+    compiled = compile_filter(state, "N0CALL")
+    sub = Subscriber(
+        "N0CALL", compiled, dedup_window_seconds=cfg.pipeline.dedup.window_for("SLOW")
+    )
+    session = ClientSession(callsign="N0CALL", state=state, compiled=compiled, subscriber=sub)
+    assert sub.dedup_window_seconds == cfg.pipeline.dedup.window_for("SLOW")
+
+    execute_command("SET DEDUPE FAST", session, cfg, pipeline)
+    assert session.dedupe_policy == "FAST"
+    assert sub.dedup_window_seconds == cfg.pipeline.dedup.window_for("FAST")

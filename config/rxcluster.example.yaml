@@ -87,8 +87,12 @@ pipeline:
   # Bounded intake queue between the sources and the processing pipeline.
   raw_queue_size: 50000
   dedup:
-    window_seconds: 30
+    # Duplicate suppression is applied per client, after that client's filter,
+    # using the window for its SET DEDUPE policy. ``window_seconds`` is the
+    # fallback for an unknown policy.
     freq_tolerance_khz: 0.1
+    window_seconds: 30
+    policies: { FAST: 10, MED: 20, SLOW: 30 }
   validation:
     scp_enabled: true
     patt3ch_enabled: true

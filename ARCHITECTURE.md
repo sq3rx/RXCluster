@@ -9,12 +9,11 @@ client can never introduce latency for the rest of the system**.
 ```
 Source connectors ──► raw queue ──► consumer task ──► Pipeline
                                                     ├─ normalize (band/mode)
-                                                    ├─ dedup
                                                     ├─ validate
                                                     ├─ enrich (VOACAP + tags)
                                                     └─ SpotBus.publish
                                                               │
-                                       per-client CompiledFilter + queue
+                                  per-client filter + dedup + queue
                                                               │
                                                      telnet writer task
 ```
@@ -29,15 +28,15 @@ Source connectors ──► raw queue ──► consumer task ──► Pipeline
    under bursts.
 3. **Normalizer** (`rxcluster/parse/`) - resolves band from frequency
    (`bisect`) and mode from source token or the sub-band plan.
-4. **Dedup** (`rxcluster/dedup/`) - sliding-window suppression of repeated
-   reports (same spotter, call and quantized frequency).
-5. **Validator** (`rxcluster/validate/`) - shape check, SCP membership,
+4. **Validator** (`rxcluster/validate/`) - shape check, SCP membership,
    geography and cross-source corroboration; assigns a confidence tag and
    rejects malformed/busted calls.
-6. **Enricher** (`rxcluster/enrich/`) - sets the propagation path class and
+5. **Enricher** (`rxcluster/enrich/`) - sets the propagation path class and
    renders the N1MM-compatible line.
-7. **SpotBus** (`rxcluster/bus/`) - fans the line out to subscribers. Each
-   subscriber has a compiled filter and a bounded queue.
+6. **SpotBus** (`rxcluster/bus/`) - fans the line out to subscribers. Each
+   subscriber has a compiled filter, its own duplicate-suppression window
+   (chosen from that client's `SET DEDUPE` policy, see `rxcluster/dedup/`) and a
+   bounded queue.
 
 ## Concurrency model
 

@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-17
+
+### Added
+
+- Per-client duplicate suppression: each subscriber keeps its own window,
+  chosen from the `SET DEDUPE` policy through the new `pipeline.dedup.policies`
+  map (`FAST`/`MED`/`SLOW`). `SET DEDUPE` now has a real effect.
+- Maidenhead locator validation for `SET GRID`; malformed locators are rejected.
+- Confidence `C` (corrected) and `B` (busted) are now emitted: a suspected bust
+  whose suggested call is a known-good SCP entry is corrected in place and
+  tagged `C`, otherwise it is forwarded with its original call, a `bust? <call>`
+  comment and tag `B`.
+
+### Changed
+
+- Duplicate suppression moved from the shared pipeline stage to the per-client
+  fan-out, so it runs after each client's filter using that client's window.
+  The `rxcluster_spots_deduped_total` metric now counts per-subscriber
+  duplicate suppressions.
+- `station.operator_grid` is the node reference locator for `PATH` tags and
+  `SHOW PROP`; per-client `SET GRID` affects only `NEARBY` and the saved
+  preferences. Messages and documentation updated accordingly.
+- Busted spots are forwarded (and can be hidden with `REJECT CONFIDENCE B`)
+  instead of being silently rejected.
+- Per-callsign settings files are written only when a mutating command is
+  handled, not on a plain login.
+
+### Fixed
+
+- `NEARBY` with no (or a malformed) operator grid is now inert instead of
+  dropping every spot.
+- `REJECT NEARBY` and `PASS NEARBY FALSE` now disable `NEARBY`; previously the
+  verb was ignored and they enabled it.
+- Own-callsign spots stay visible when `SELF` is on, even while `NEARBY` is
+  active.
+- Corroboration no longer leaks memory (stale frequency buckets are swept) and
+  now keys on the base callsign so portable calls match SCP consistently.
+
 ## [0.1.0] - 2026-10-16
 
 Initial release.

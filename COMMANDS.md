@@ -72,7 +72,7 @@ See [FILTERS.md](FILTERS.md) for the full category list and semantics.
 | --- | --- |
 | `SET GRID <locator>` | Set your Maidenhead locator (affects NEARBY filtering and saved preferences; propagation tags use the node reference `station.operator_grid`) |
 | `SET NOISE <class>` | Set your receive-noise class |
-| `SET DEDUPE <FAST\|MED\|SLOW>` | Duplicate-suppression policy (session preference) |
+| `SET DEDUPE <FAST\|MED\|SLOW>` | Per-client duplicate-suppression window (FAST 10 s, MED 20 s, SLOW 30 s) |
 | `PAUSE [seconds]` | Pause live spots (default 30 s, max 300) |
 | `RESUME` | Resume live spots immediately |
 | `HELP [command]` | Show the help text, or help for one command |

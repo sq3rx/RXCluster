@@ -35,8 +35,16 @@ The `S`/`P`/`V` thresholds come from
 
 When a lone report is **not** in the SCP and there is a nearby call (bounded
 Levenshtein distance, default 1) at the same frequency with corroborated
-support, the report is flagged `B` and the suggested correct call is recorded.
-Spots evaluated as busted are **rejected** and not forwarded.
+support, the report is corrected or flagged:
+
+- if the suggested call is a known-good SCP entry, the spot's callsign is
+  replaced with the suggestion, it is tagged `C` and forwarded with an
+  `ex <original>` comment;
+- otherwise the spot keeps its original call, is tagged `B` and forwarded with a
+  `bust? <suggestion>` comment.
+
+Either way the spot is forwarded (not dropped) so the operator can see the
+suspect call; use `REJECT CONFIDENCE B` to hide busts.
 
 The edit distance is configurable via
 `pipeline.validation.corroboration.edit_distance`.

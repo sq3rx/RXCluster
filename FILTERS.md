@@ -135,6 +135,8 @@ callsign logs in. This covers all `PASS`/`REJECT` selections, `MINSNR`,
 is handled; a plain login that changes nothing creates no file. Note that the
 saved `SET GRID` only affects the per-client NEARBY filter — propagation `PATH`
 tags and `SHOW PROP` always use the node reference `station.operator_grid`.
+`SET DEDUPE` selects a per-client duplicate-suppression window (FAST 10 s,
+MED 20 s, SLOW 30 s) that is applied to your own spot stream after your filter.
 
 Persistence is keyed solely on the callsign typed at the login prompt; the DX
 cluster protocol has no authentication, so treat the stored settings as a
