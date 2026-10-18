@@ -14,7 +14,7 @@ from ..grid import is_valid_grid
 from ..models import Mode
 from ..validate.patterns import is_valid_shape
 from .compiled import describe
-from .model import SWITCH_NAMES, FilterState
+from .model import EXACT_CATEGORIES, SWITCH_NAMES, FilterState
 
 # Mapping from user-facing category tokens to internal category names.
 _CATEGORY_ALIASES: dict[str, str] = {
@@ -25,6 +25,8 @@ _CATEGORY_ALIASES: dict[str, str] = {
     "DECALL": "decall",
     "DXCONT": "dxcont",
     "DECONT": "decont",
+    # DX Spider / CC Cluster spelling of the DX continent filter.
+    "CONT": "dxcont",
     "DXZONE": "dxzone",
     "DEZONE": "dezone",
     "DXDXCC": "dxdxcc",
@@ -41,6 +43,17 @@ _CATEGORY_ALIASES: dict[str, str] = {
 # Categories whose values may contain spaces (DXCC entity names, comment
 # phrases); these are split on commas only, not on whitespace.
 _GROUPED_CATEGORIES = frozenset({"dxdxcc", "dedxcc", "comment"})
+
+# ``SET/<SUB>`` continent aliases (CC Cluster / DX Spider). The ``NO``-prefixed
+# entries clear the selection, the others behave like PASS.
+_CONTI_SET_SUBS: dict[str, tuple[str, bool]] = {
+    "CONT": ("dxcont", False),
+    "DXCONT": ("dxcont", False),
+    "DECONT": ("decont", False),
+    "NOCONT": ("dxcont", True),
+    "NODXCONT": ("dxcont", True),
+    "NODECONT": ("decont", True),
+}
 
 # Characters allowed in a manually posted spot comment.
 _POST_COMMENT_RE = re.compile(r"^[A-Za-z0-9 /#@\-.,*?_]*$")
@@ -152,6 +165,10 @@ def parse_command(
         return _parse_show(["DX", *args], state, h)
 
     if verb == "ACCEPT":
+        # DX Spider uses ACCEPT/<CATEGORY> as the positive filter verb, e.g.
+        # ACCEPT/CONT EU. A bare ACCEPT (or ACCEPT/SPOTS) resumes the feed.
+        if args and args[0].upper() in _CATEGORY_ALIASES:
+            return _parse_pass_reject("PASS", args, state, h)
         return CommandResult(handled=True, responses=["Spots resumed."])
 
     if verb == "DX":
@@ -236,9 +253,20 @@ def _parse_pass_reject(
         state.add_allow(category, values)
     else:
         state.add_reject(category, values)
-    return CommandResult(
-        handled=True, changed=True, responses=[f"{verb} {token} {','.join(values)}."]
-    )
+    response = f"{verb} {token} {','.join(values)}."
+    if (
+        verb == "PASS"
+        and category in EXACT_CATEGORIES
+        and state.allow.get(category) is None
+        and not any(v.lower() == "all" for v in values)
+    ):
+        # Exact categories start unrestricted, so a lone PASS adds nothing.
+        # The command is accepted but has no effect until the category is
+        # narrowed with REJECT <CATEGORY> ALL.
+        response += (
+            f" {token} is unrestricted; use REJECT {token} ALL first to show only these."
+        )
+    return CommandResult(handled=True, changed=True, responses=[response])
 
 
 def _parse_minsnr(verb: str, args: list[str], state: FilterState) -> CommandResult:
@@ -352,6 +380,17 @@ def _parse_set(args: list[str], state: FilterState, h: CommandHandlers) -> Comma
         return CommandResult(handled=True, changed=True, responses=["Spots enabled."])
     if sub in ("DX_FILTER", "FILTER"):
         return CommandResult(handled=True, responses=["Filter accepted."])
+
+    conti = _CONTI_SET_SUBS.get(sub)
+    if conti is not None:
+        category, negate = conti
+        if negate:
+            state.add_reject(category, ["all"])
+            return CommandResult(
+                handled=True, changed=True, responses=[f"REJECT {sub[2:]} ALL."]
+            )
+        # Reuse the PASS path so the "unrestricted" hint applies here too.
+        return _parse_pass_reject("PASS", [sub, *rest], state, h)
 
     return CommandResult(handled=True, responses=[f"SET {sub}: acknowledged."])
 

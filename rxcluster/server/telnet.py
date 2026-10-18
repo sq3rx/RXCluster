@@ -99,7 +99,8 @@ class TelnetServer:
             noise = str(record.get("noise", noise))
             dedupe = str(record.get("dedupe", dedupe))
 
-        compiled = compile_filter(state, callsign, grid)
+        cty = self.pipeline.validator.cty
+        compiled = compile_filter(state, callsign, grid, cty)
         dedup_cfg = self.cfg.pipeline.dedup
         subscriber = Subscriber(
             callsign,
@@ -118,6 +119,7 @@ class TelnetServer:
             grid=grid,
             noise=noise,
             dedupe_policy=dedupe,
+            cty=cty,
         )
         session.persist = lambda: self._persist(session)
         self._clients.add(session)

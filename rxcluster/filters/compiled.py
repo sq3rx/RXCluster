@@ -13,6 +13,7 @@ from collections.abc import Hashable
 
 from ..grid import distance_km, grid_to_latlon
 from ..models import SourceType, Spot, SpotKind
+from ..validate.cty import CtyDatabase
 from .model import EXACT_CATEGORIES, FilterState
 
 KNOWN_EVENTS = ("POTA", "SOTA", "IOTA", "WWFF", "LLOTA")
@@ -36,6 +37,24 @@ def _compile_patterns(patterns: list[str]) -> list[re.Pattern[str]]:
     return compiled
 
 
+def _dxcc_names(values: set[str] | None, cty: CtyDatabase | None) -> frozenset[str]:
+    """Expand DXCC filter values to the lowercase entity names they denote.
+
+    A value may be an entity name ("United States") or a canonical prefix
+    ("SP", "DL"). When ``cty`` is available the prefix is resolved to its
+    entity name so a prefix filter matches every call of that entity; without
+    it only the literal value is kept (matched by name or call prefix).
+    """
+    names: set[str] = set()
+    for value in values or ():
+        names.add(value.lower())
+        if cty is not None:
+            entity = cty.lookup(value)
+            if entity is not None:
+                names.add(entity.name.lower())
+    return frozenset(names)
+
+
 class CompiledFilter:
     """Immutable predicate deciding whether a spot passes for one client."""
 
@@ -52,10 +71,16 @@ class CompiledFilter:
         "_operator_grid",
         "_operator_pos",
         "_nearby",
+        "_dxcc_allow_names",
+        "_dxcc_reject_names",
     )
 
     def __init__(
-        self, state: FilterState, operator_call: str = "", operator_grid: str = ""
+        self,
+        state: FilterState,
+        operator_call: str = "",
+        operator_grid: str = "",
+        cty: CtyDatabase | None = None,
     ) -> None:
         self._allow = {
             cat: (frozenset(v) if v is not None else None) for cat, v in state.allow.items()
@@ -78,6 +103,15 @@ class CompiledFilter:
             grid_to_latlon(self._operator_grid) if self._operator_grid else None
         )
         self._nearby = bool(state.nearby)
+        # Resolve DXCC/spotter-DXCC values through cty at compile time: an
+        # entity name is derived from each prefix so that e.g. REJECT DXDXCC SP
+        # also matches SQ9ABC (both resolve to Poland).
+        self._dxcc_allow_names = {
+            cat: _dxcc_names(state.allow.get(cat), cty) for cat in ("dxdxcc", "dedxcc")
+        }
+        self._dxcc_reject_names = {
+            cat: _dxcc_names(state.reject.get(cat), cty) for cat in ("dxdxcc", "dedxcc")
+        }
 
     # -- category value extraction ----------------------------------------
     @staticmethod
@@ -121,16 +155,23 @@ class CompiledFilter:
         up = value.upper()
         return any(p.match(up) for p in patterns)
 
-    # -- DXCC matching (entity name or canonical prefix) -------------------
-    def _dxcc_matches(self, category: str, spot: Spot, value: str) -> bool:
+    # -- DXCC matching (entity name, cty-resolved name or canonical prefix) --
+    def _dxcc_matches(
+        self,
+        category: str,
+        spot: Spot,
+        values: frozenset[str],
+        names: frozenset[str],
+    ) -> bool:
         if category == "dxdxcc":
             name, call = spot.dxcc.lower(), spot.dx_call.upper()
         else:
             name, call = spot.spotter_dxcc.lower(), spot.spotter.upper()
-        if value.lower() == name:
+        # Entity name, including names derived from a canonical prefix via cty.
+        if name and name in names:
             return True
         # Canonical prefix: match the leading characters of the callsign.
-        return bool(value) and call.startswith(value.upper())
+        return any(value and call.startswith(value.upper()) for value in values)
 
     # -- NEARBY ------------------------------------------------------------
     def _nearby_pass(self, spot: Spot) -> bool:
@@ -185,11 +226,13 @@ class CompiledFilter:
                 continue
             if cat in ("dxdxcc", "dedxcc"):
                 rejected = self._reject.get(cat)
-                if rejected and any(self._dxcc_matches(cat, spot, v) for v in rejected):
+                if rejected and self._dxcc_matches(
+                    cat, spot, rejected, self._dxcc_reject_names[cat]
+                ):
                     return False
                 allowed = self._allow.get(cat)
-                if allowed is not None and not any(
-                    self._dxcc_matches(cat, spot, v) for v in allowed
+                if allowed is not None and not self._dxcc_matches(
+                    cat, spot, allowed, self._dxcc_allow_names[cat]
                 ):
                     return False
                 continue
@@ -254,7 +297,12 @@ class CompiledFilter:
 _intern_cache: dict[Hashable, CompiledFilter] = {}
 
 
-def _signature(state: FilterState, operator_call: str, operator_grid: str) -> Hashable:
+def _signature(
+    state: FilterState,
+    operator_call: str,
+    operator_grid: str,
+    cty: CtyDatabase | None,
+) -> Hashable:
     def _norm(mapping: dict[str, set[str] | None]) -> tuple:
         return tuple(
             sorted((k, (frozenset(v) if v is not None else None)) for k, v in mapping.items())
@@ -267,6 +315,7 @@ def _signature(state: FilterState, operator_call: str, operator_grid: str) -> Ha
         operator_call.upper(),
         operator_grid.strip().upper(),
         state.nearby,
+        id(cty) if cty is not None else None,
         _norm(state.allow),
         _norm(state.reject),
         _norm_list(state.allow_patterns),
@@ -279,14 +328,22 @@ def _signature(state: FilterState, operator_call: str, operator_grid: str) -> Ha
 
 
 def compile_filter(
-    state: FilterState, operator_call: str = "", operator_grid: str = ""
+    state: FilterState,
+    operator_call: str = "",
+    operator_grid: str = "",
+    cty: CtyDatabase | None = None,
 ) -> CompiledFilter:
-    """Compile (and intern) a :class:`CompiledFilter` for the given state."""
-    sig = _signature(state, operator_call, operator_grid)
+    """Compile (and intern) a :class:`CompiledFilter` for the given state.
+
+    ``cty`` is optional and only used to resolve ``DXDXCC``/``DEDXCC`` prefix
+    values to their entity names; without it those categories match on the
+    literal value or the callsign prefix only.
+    """
+    sig = _signature(state, operator_call, operator_grid, cty)
     cached = _intern_cache.get(sig)
     if cached is not None:
         return cached
-    compiled = CompiledFilter(state, operator_call, operator_grid)
+    compiled = CompiledFilter(state, operator_call, operator_grid, cty)
     _intern_cache[sig] = compiled
     if len(_intern_cache) > 4096:  # simple bound to avoid unbounded growth
         _intern_cache.clear()

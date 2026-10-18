@@ -151,3 +151,22 @@ def test_dxcont_decont_filters_after_geography(tmp_path):
     parse_command("REJECT DECONT ALL", state)
     parse_command("PASS DECONT EU", state)
     assert not compile_filter(state).allows(spot)  # spotter is NA
+
+
+def test_dxdxcc_prefix_resolved_via_cty(tmp_path):
+    cty = _load_cty(tmp_path)
+    validator = Validator(ValidationConfig(), ScpDatabase(), cty)
+    spot = make_spot("SQ9ABC", spotter="W3LPR")
+    validator.process(spot)
+
+    # SP is a Poland prefix; the spot's call SQ9ABC also resolves to Poland.
+    state = FilterState()
+    parse_command("REJECT DXDXCC SP", state)
+    assert not compile_filter(state, cty=cty).allows(spot)
+    # Without cty only the literal value / call prefix is compared.
+    assert compile_filter(state, cty=None).allows(spot)
+
+    # DEDXCC resolves the spotter's entity the same way.
+    state = FilterState()
+    parse_command("REJECT DEDXCC W", state)
+    assert not compile_filter(state, cty=cty).allows(spot)

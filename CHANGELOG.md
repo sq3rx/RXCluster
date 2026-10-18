@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ACCEPT/CONT` and `REJECT/CONT` (DX Spider) plus `SET/DXCONT`, `SET/DECONT`
+  and `SET/NOCONT` are now mapped to the `DXCONT`/`DECONT` filters; previously
+  `ACCEPT/CONT` resumed the feed and `SET/...` was silently acknowledged,
+  leaving the filter unchanged.
+- `DXDXCC`/`DEDXCC` values are now resolved through `cty.dat`, so a canonical
+  prefix matches every call of that entity: `REJECT DXDXCC SP` blocks `SQ9ABC`
+  (both resolve to Poland), not just calls that literally start with `SP`.
+- A lone `PASS <CATEGORY> <values>` on an unrestricted exact category (e.g.
+  `PASS DXCONT EU`) now warns that it has no effect until `REJECT <CATEGORY>
+  ALL` is issued, instead of silently reporting success.
 - `cty.dat` parsing now tolerates spurious blank lines (e.g. files saved with
   CR-CR-LF line endings). Previously a blank line after an entity header
   dropped all of its continuation prefixes, so geography filters

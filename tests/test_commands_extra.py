@@ -195,6 +195,34 @@ def test_self_off_own_call_rejected():
     assert not compiled.allows(make_spot(dx_call="K1ABC"))
 
 
+def test_lone_pass_exact_category_hint():
+    # A lone PASS on an unrestricted exact category is inert and must say so.
+    state = FilterState()
+    result = parse_command("PASS DXCONT EU", state)
+    assert state.allow["dxcont"] is None
+    assert "REJECT DXCONT ALL" in result.responses[0]
+
+
+def test_continent_aliases():
+    for cmd in ("PASS CONT EU", "ACCEPT/CONT EU"):
+        state = FilterState()
+        parse_command("REJECT DXCONT ALL", state)
+        parse_command(cmd, state)
+        assert state.allow["dxcont"] == {"eu"}
+    state = FilterState()
+    parse_command("REJECT/CONT EU", state)
+    assert state.reject["dxcont"] == {"eu"}
+
+
+def test_set_continent_aliases():
+    state = FilterState()
+    parse_command("REJECT DXCONT ALL", state)
+    parse_command("SET/DXCONT EU", state)
+    assert state.allow["dxcont"] == {"eu"}
+    parse_command("SET/NOCONT", state)
+    assert state.allow["dxcont"] == set()
+
+
 def test_describe_category_and_full():
     state = FilterState()
     assert "BAND" in describe(state, "band")

@@ -25,6 +25,9 @@ are written to a client, which reduces telnet traffic and CPU load on N1MM.
 
 Values for `DXDXCC`/`DEDXCC` (entity names) and `COMMENT` (phrases) may contain
 spaces; separate multiple values with commas, e.g. `REJECT COMMENT QRT,QSY`.
+`DXDXCC`/`DEDXCC` values are resolved through `cty.dat`, so a canonical prefix
+matches every call of that entity: `REJECT DXDXCC SP` blocks `SQ9ABC` as well,
+because both resolve to Poland.
 
 ## Categories
 
@@ -103,6 +106,10 @@ REJECT DECALL W3LPL
 | `SET/DX` | enable spots |
 | `SET/SKIMMER ON\|OFF` | allow/reject skimmer-sourced spots |
 | `SET/FT8` / `SET/NOFT8` | allow/reject FT8 |
+| `ACCEPT/CONT <v>` / `PASS CONT <v>` | allow DX continents (alias for `PASS DXCONT`) |
+| `REJECT/CONT <v>` | reject DX continents (alias for `REJECT DXCONT`) |
+| `SET/DXCONT <v>` / `SET/DECONT <v>` | allow DX/spotter continents |
+| `SET/NODXCONT` / `SET/NODECONT` | clear the continent selection |
 | `SET DX FILTER ...` | accepted (acknowledged) |
 | `ACCEPT/SPOTS` | continue streaming |
 

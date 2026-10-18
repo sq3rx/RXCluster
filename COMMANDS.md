@@ -85,6 +85,8 @@ See [FILTERS.md](FILTERS.md) for the full category list and semantics.
 | `SET/DX` | Enable spots |
 | `SET/SKIMMER ON\|OFF` | Enable/disable skimmer-sourced spots |
 | `SET/FT8` / `SET/NOFT8` | Enable/disable FT8 |
+| `ACCEPT/CONT <v>` / `REJECT/CONT <v>` | Allow/reject DX continents (`PASS`/`REJECT DXCONT`) |
+| `SET/DXCONT <v>` / `SET/DECONT <v>` | Allow DX/spotter continents; `SET/NODXCONT` clears |
 | `SET DX FILTER ...` | Accepted and acknowledged |
 | `ACCEPT/SPOTS` | Continue streaming |
 

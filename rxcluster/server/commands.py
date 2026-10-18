@@ -17,6 +17,7 @@ from ..filters.parser import (
     parse_command,
 )
 from ..pipeline import Pipeline
+from ..validate.cty import CtyDatabase
 
 
 @dataclass(eq=False)
@@ -30,10 +31,11 @@ class ClientSession:
     dedupe_policy: str = "SLOW"
     paused_until: float = 0.0
     suppressed: int = 0
+    cty: CtyDatabase | None = None
     persist: Callable[[], None] | None = field(default=None, repr=False, compare=False)
 
     def recompile(self) -> None:
-        self.compiled = compile_filter(self.state, self.callsign, self.grid)
+        self.compiled = compile_filter(self.state, self.callsign, self.grid, self.cty)
         self.subscriber.filter = self.compiled
 
 
