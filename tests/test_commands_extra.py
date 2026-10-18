@@ -1,5 +1,5 @@
 from rxcluster.filters.compiled import compile_filter, describe
-from rxcluster.filters.model import FilterState
+from rxcluster.filters.model import DEFAULT_SWITCHES, FilterState
 from rxcluster.filters.parser import CommandHandlers, parse_command
 from rxcluster.models import Confidence, Mode, Source, SourceType, Spot
 
@@ -221,6 +221,45 @@ def test_set_continent_aliases():
     assert state.allow["dxcont"] == {"eu"}
     parse_command("SET/NOCONT", state)
     assert state.allow["dxcont"] == set()
+
+
+def test_reset_category_clears_only_that_category():
+    state = FilterState()
+    parse_command("REJECT BAND 40m", state)
+    parse_command("REJECT DXCONT EU", state)
+    parse_command("RESET BAND", state)
+    assert state.reject["band"] == set()
+    assert state.reject["dxcont"] == {"eu"}
+
+
+def test_reset_all_without_defaults_clears_everything():
+    state = FilterState()
+    parse_command("REJECT BAND 40m", state)
+    parse_command("REJECT DXCONT EU", state)
+    parse_command("PASS MINSNR CW 10", state)
+    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FN31"))
+    parse_command("REJECT BEACON", state)
+    parse_command("RESET", state)
+    assert state.reject["band"] == set()
+    assert state.reject["dxcont"] == set()
+    assert state.min_snr == {}
+    assert state.nearby is False
+    assert state.switches == DEFAULT_SWITCHES
+
+
+def test_reset_restores_node_defaults():
+    state = FilterState()
+    parse_command("REJECT BAND 40m", state)
+
+    def defaults() -> FilterState:
+        node = FilterState()
+        parse_command("REJECT BAND ALL", node)
+        parse_command("PASS BAND 20,40", node)
+        return node
+
+    parse_command("RESET", state, CommandHandlers(default_state_provider=defaults))
+    assert state.reject["band"] == set()
+    assert state.allow["band"] == {"20m", "40m"}
 
 
 def test_describe_category_and_full():

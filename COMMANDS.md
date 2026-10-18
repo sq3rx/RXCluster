@@ -65,6 +65,7 @@ See [FILTERS.md](FILTERS.md) for the full category list and semantics.
 | `PASS MINSNR <MODE> <dB\|ALL>` | Set a per-mode minimum SNR (e.g. `PASS MINSNR CW 10`) |
 | `PASS/REJECT NEARBY ON\|OFF` | Keep only spots near your grid (requires `SET GRID`) |
 | `PASS/REJECT BEACON\|WWV\|WCY\|ANNOUNCE\|SELF\|TOXIC` | Toggle feature switches |
+| `RESET [ALL\|<CATEGORY>\|MINSNR\|NEARBY\|SWITCHES]` | Clear one category or restore the node-level defaults; `CLEAR` is an alias |
 
 ### Session / preferences
 

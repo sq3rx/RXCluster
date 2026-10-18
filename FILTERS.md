@@ -29,6 +29,19 @@ spaces; separate multiple values with commas, e.g. `REJECT COMMENT QRT,QSY`.
 matches every call of that entity: `REJECT DXDXCC SP` blocks `SQ9ABC` as well,
 because both resolve to Poland.
 
+## Reset
+
+`RESET` restores the node-level defaults (the template from the configuration,
+i.e. the state of a fresh login). `RESET <CATEGORY>` clears a single category,
+and `RESET MINSNR`, `RESET NEARBY` and `RESET SWITCHES` clear those groups.
+`CLEAR` is an alias. Examples:
+
+```text
+RESET DXCONT      # clear the DX continent filter only
+RESET MINSNR      # drop all per-mode SNR thresholds
+RESET             # back to the node defaults
+```
+
 ## Categories
 
 | Category | Matches | Values |

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from ..bus.pubsub import Subscriber
 from ..config import Config
 from ..filters.compiled import CompiledFilter, compile_filter
-from ..filters.model import FilterState
+from ..filters.model import FilterState, default_state_from_config
 from ..filters.parser import (
     CommandHandlers,
     CommandResult,
@@ -85,6 +85,7 @@ def execute_command(
         post_handler=_post,
         resume_setter=_resume,
         hold_provider=_hold,
+        default_state_provider=lambda: default_state_from_config(cfg.defaults),
     )
     result = parse_command(line, session.state, handlers)
     if result.changed:

@@ -14,7 +14,7 @@ from ..grid import is_valid_grid
 from ..models import Mode
 from ..validate.patterns import is_valid_shape
 from .compiled import describe
-from .model import EXACT_CATEGORIES, SWITCH_NAMES, FilterState
+from .model import ALL_CATEGORIES, DEFAULT_SWITCHES, EXACT_CATEGORIES, SWITCH_NAMES, FilterState
 
 # Mapping from user-facing category tokens to internal category names.
 _CATEGORY_ALIASES: dict[str, str] = {
@@ -98,6 +98,9 @@ class CommandHandlers:
     pause_setter: Callable[[int], str] | None = None
     resume_setter: Callable[[], str] | None = None
     hold_provider: Callable[[], str] | None = None
+    # Supplies a fresh :class:`FilterState` holding the node-level defaults,
+    # used by RESET to restore the login-time filter.
+    default_state_provider: Callable[[], FilterState] | None = None
 
 
 def _split_values(args: list[str]) -> list[str]:
@@ -154,6 +157,9 @@ def parse_command(
 
     if verb in ("PASS", "REJECT"):
         return _parse_pass_reject(verb, args, state, h)
+
+    if verb in ("RESET", "CLEAR"):
+        return _parse_reset(args, state, h)
 
     if verb == "SET":
         return _parse_set(args, state, h)
@@ -267,6 +273,54 @@ def _parse_pass_reject(
             f" {token} is unrestricted; use REJECT {token} ALL first to show only these."
         )
     return CommandResult(handled=True, changed=True, responses=[response])
+
+
+def _parse_reset(
+    args: list[str], state: FilterState, h: CommandHandlers
+) -> CommandResult:
+    token = args[0].upper() if args else "ALL"
+
+    if token == "ALL":
+        if h.default_state_provider is not None:
+            dst = h.default_state_provider()
+            state.allow = {k: (set(v) if v is not None else None) for k, v in dst.allow.items()}
+            state.reject = {k: set(v) for k, v in dst.reject.items()}
+            state.allow_patterns = {
+                k: (list(v) if v is not None else None) for k, v in dst.allow_patterns.items()
+            }
+            state.reject_patterns = {k: list(v) for k, v in dst.reject_patterns.items()}
+            state.comment_allow = list(dst.comment_allow)
+            state.comment_reject = list(dst.comment_reject)
+            state.min_snr = dict(dst.min_snr)
+            state.switches = dict(dst.switches)
+            state.nearby = dst.nearby
+            return CommandResult(
+                handled=True, changed=True, responses=["Filter reset to node defaults."]
+            )
+        for cat in ALL_CATEGORIES:
+            state.clear_category(cat)
+        state.min_snr.clear()
+        state.switches = dict(DEFAULT_SWITCHES)
+        state.nearby = False
+        return CommandResult(handled=True, changed=True, responses=["Filter reset."])
+
+    if token == "MINSNR":
+        state.min_snr.clear()
+        return CommandResult(handled=True, changed=True, responses=["MINSNR reset."])
+    if token == "NEARBY":
+        state.set_nearby(False)
+        return CommandResult(handled=True, changed=True, responses=["NEARBY off."])
+    if token in ("SWITCH", "SWITCHES"):
+        state.switches = dict(DEFAULT_SWITCHES)
+        return CommandResult(handled=True, changed=True, responses=["Switches reset."])
+
+    category = _CATEGORY_ALIASES.get(token)
+    if category is None:
+        return CommandResult(
+            handled=True, responses=[f"RESET: unknown category {token!r}. Type HELP RESET."]
+        )
+    state.clear_category(category)
+    return CommandResult(handled=True, changed=True, responses=[f"RESET {token}."])
 
 
 def _parse_minsnr(verb: str, args: list[str], state: FilterState) -> CommandResult:
@@ -522,6 +576,11 @@ def _parse_help(args: list[str]) -> CommandResult:
             "SHOW DEDUPE | SHOW HOLD | SHOW PROP <call|prefix|grid> [band] [mode]"
         ),
         "SET": "SET GRID <locator> | SET NOISE <class> | SET DEDUPE <FAST|MED|SLOW>",
+        "RESET": (
+            "RESET [ALL|<CATEGORY>|MINSNR|NEARBY|SWITCHES]  Restore the filter.\n"
+            "RESET alone restores the node-level defaults; RESET <CATEGORY> clears\n"
+            "one category. CLEAR is an alias."
+        ),
     }
     if topic in topics:
         return CommandResult(handled=True, responses=[topics[topic]])
@@ -541,5 +600,6 @@ def _help_text() -> str:
         "  PAUSE [seconds] | RESUME | SHOW HOLD\n"
         "  SET GRID <locator> | SET NOISE <class> | SET DEDUPE <FAST|MED|SLOW>\n"
         "  SET/SKIMMER [ON|OFF] | SET/FT8 | SET/NOFT8\n"
+        "  RESET [ALL|<CATEGORY>|MINSNR|NEARBY|SWITCHES] (alias CLEAR)\n"
         "  HELP [command] | BYE"
     )
