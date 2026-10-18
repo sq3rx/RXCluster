@@ -9,15 +9,17 @@ from rxcluster.models import Confidence, Mode, Source, SourceType, Spot
 def _nearby_handlers(spec: NearbySpec, grid: str) -> CommandHandlers:
     """Wire the session-level NEARBY callbacks the telnet server provides."""
 
-    def setter(enabled: bool, radius: float | None) -> str:
+    def setter(enabled: bool, radius: float | None, low_radius: float | None) -> str:
         spec.enabled = enabled
         if radius is not None:
             spec.radius_km = radius
+        if low_radius is not None:
+            spec.low_band_radius_km = low_radius
         if not enabled:
             return "NEARBY off."
         if not is_valid_grid(grid):
             return "NEARBY on; set a grid with SET GRID for it to take effect."
-        return f"NEARBY on ({spec.radius_km:g} km)."
+        return f"NEARBY on ({spec.radius_km:g} km, {spec.low_band_radius_km:g} km low)."
 
     return CommandHandlers(operator_grid=grid, nearby_setter=setter)
 
@@ -149,6 +151,11 @@ def test_nearby_radius_argument():
     parse_command("PASS NEARBY 300", FilterState(), handlers)
     assert spec.enabled is True
     assert spec.radius_km == 300.0
+    assert spec.low_band_radius_km == 1500.0
+
+    parse_command("PASS NEARBY 400 1200", FilterState(), handlers)
+    assert spec.radius_km == 400.0
+    assert spec.low_band_radius_km == 1200.0
 
 
 def test_nearby_without_grid_warns():
@@ -342,8 +349,9 @@ def test_session_nearby_via_execute_command():
     result = execute_command("SHOW NEARBY", session, cfg, pipeline)
     assert any("NEARBY" in line for line in result.responses)
 
-    execute_command("PASS NEARBY 500", session, cfg, pipeline)
+    execute_command("PASS NEARBY 500 2000", session, cfg, pipeline)
     assert session.nearby.radius_km == 500.0
+    assert session.nearby.low_band_radius_km == 2000.0
 
     execute_command("REJECT NEARBY", session, cfg, pipeline)
     assert session.nearby.enabled is False

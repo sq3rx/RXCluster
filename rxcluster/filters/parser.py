@@ -100,7 +100,7 @@ class CommandHandlers:
     hold_provider: Callable[[], str] | None = None
     # NEARBY is a session-level feature (operator grid + radius), not a filter
     # category, so it is wired through these callbacks.
-    nearby_setter: Callable[[bool, float | None], str] | None = None
+    nearby_setter: Callable[[bool, float | None, float | None], str] | None = None
     nearby_provider: Callable[[], list[str]] | None = None
     # Supplies a fresh :class:`FilterState` holding the node-level defaults,
     # used by RESET to restore the login-time filter.
@@ -228,10 +228,11 @@ def _parse_pass_reject(
         )
 
     if token == "NEARBY":
-        # PASS enables NEARBY, REJECT disables it; an explicit ON/OFF token wins,
-        # and a numeric argument sets the radius in kilometres.
+        # PASS enables NEARBY, REJECT disables it. A numeric argument sets the
+        # radius in km; a second number sets the low-band radius.
         on = verb == "PASS"
         radius: float | None = None
+        low_radius: float | None = None
         if rest:
             value = rest[0].upper()
             if value in ("OFF", "NO", "0", "FALSE"):
@@ -243,15 +244,26 @@ def _parse_pass_reject(
                     radius = float(rest[0])
                 except ValueError:
                     return CommandResult(
-                        handled=True, responses=["NEARBY: ON|OFF|<radius_km>."]
+                        handled=True, responses=["NEARBY: ON|OFF|<km> [<low_km>]."]
                     )
                 if radius <= 0:
                     return CommandResult(handled=True, responses=["NEARBY radius must be > 0."])
                 on = True
+                if len(rest) > 1:
+                    try:
+                        low_radius = float(rest[1])
+                    except ValueError:
+                        return CommandResult(
+                            handled=True, responses=["NEARBY low-band radius must be a number."]
+                        )
+                    if low_radius <= 0:
+                        return CommandResult(
+                            handled=True, responses=["NEARBY radius must be > 0."]
+                        )
         if h.nearby_setter is None:
             return CommandResult(handled=True, responses=["NEARBY is not available."])
         return CommandResult(
-            handled=True, changed=True, responses=[h.nearby_setter(on, radius)]
+            handled=True, changed=True, responses=[h.nearby_setter(on, radius, low_radius)]
         )
 
     category = _CATEGORY_ALIASES.get(token)
@@ -305,7 +317,7 @@ def _parse_reset(
             state.min_snr = dict(dst.min_snr)
             state.switches = dict(dst.switches)
             if h.nearby_setter is not None:
-                h.nearby_setter(False, None)
+                h.nearby_setter(False, None, None)
             return CommandResult(
                 handled=True, changed=True, responses=["Filter reset to node defaults."]
             )
@@ -314,7 +326,7 @@ def _parse_reset(
         state.min_snr.clear()
         state.switches = dict(DEFAULT_SWITCHES)
         if h.nearby_setter is not None:
-            h.nearby_setter(False, None)
+            h.nearby_setter(False, None, None)
         return CommandResult(handled=True, changed=True, responses=["Filter reset."])
 
     if token == "MINSNR":
@@ -322,7 +334,7 @@ def _parse_reset(
         return CommandResult(handled=True, changed=True, responses=["MINSNR reset."])
     if token == "NEARBY":
         if h.nearby_setter is not None:
-            h.nearby_setter(False, None)
+            h.nearby_setter(False, None, None)
         return CommandResult(handled=True, changed=True, responses=["NEARBY off."])
     if token in ("SWITCH", "SWITCHES"):
         state.switches = dict(DEFAULT_SWITCHES)
@@ -592,7 +604,7 @@ def _parse_help(args: list[str]) -> CommandResult:
             "Categories: BAND MODE SOURCE DXCALL DECALL DXCONT DECONT DXZONE DEZONE\n"
             "            DXDXCC DEDXCC DXGRID2 DEGRID2 CONFIDENCE PATH COMMENT EVENT\n"
             "Switches:   BEACON WWV WCY ANNOUNCE SELF\n"
-            "Special:    PASS MINSNR <MODE> <dB|ALL> | PASS NEARBY ON|OFF|<km>"
+            "Special:    PASS MINSNR <MODE> <dB|ALL> | PASS NEARBY ON|OFF|<km> [<low_km>]"
         ),
         "REJECT": (
             "REJECT <CATEGORY> <values>  Block values; REJECT <CATEGORY> ALL blocks all.\n"
@@ -620,7 +632,7 @@ def _help_text() -> str:
         "  PASS/REJECT BAND|MODE|SOURCE|DXCALL|DECALL|DXCONT|DECONT|DXZONE|DEZONE\n"
         "              DXDXCC|DEDXCC|DXGRID2|DEGRID2|CONFIDENCE|PATH|COMMENT|EVENT <values>\n"
         "  PASS/REJECT BEACON|WWV|WCY|ANNOUNCE|SELF\n"
-        "  PASS MINSNR <MODE> <dB|ALL> | PASS NEARBY ON|OFF|<km>\n"
+        "  PASS MINSNR <MODE> <dB|ALL> | PASS NEARBY ON|OFF|<km> [<low_km>]\n"
         "  DX <freq_khz> <call> [comment]\n"
         "  SHOW DX [call] [n] | SHOW FILTER [FULL|<CAT>] | SHOW SETTINGS\n"
         "  SHOW DEDUPE | SHOW NEARBY | SHOW HOLD\n"

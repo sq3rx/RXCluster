@@ -74,8 +74,8 @@ PASS/REJECT selections). `PASS NEARBY ON` (requires `SET GRID`) keeps only spots
 where either the DX station or the spotter is near your grid: within the
 configured radius (default 700 km, or 1500 km on 160 m, 80 m and 60 m). The
 radii are configurable in `pipeline.nearby` and can be overridden per session
-with `PASS NEARBY <km>`. `SHOW NEARBY` prints the current state, grid and
-radius.
+with `PASS NEARBY <km>` (high bands) or `PASS NEARBY <km> <low_km>` (high and
+low bands). `SHOW NEARBY` prints the current state, grid and radii.
 
 NEARBY is combined with the other categories using **AND**: it does not suspend
 the geography filters, so `REJECT DXCONT ALL` + `PASS DXCONT EU` and `PASS

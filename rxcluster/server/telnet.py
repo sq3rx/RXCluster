@@ -107,11 +107,12 @@ class TelnetServer:
             if isinstance(stored_nearby, dict):
                 if "enabled" in stored_nearby:
                     nearby.enabled = bool(stored_nearby["enabled"])
-                if "radius_km" in stored_nearby:
-                    try:
-                        nearby.radius_km = float(stored_nearby["radius_km"])
-                    except (TypeError, ValueError):
-                        pass
+                for field_name in ("radius_km", "low_band_radius_km"):
+                    if field_name in stored_nearby:
+                        try:
+                            setattr(nearby, field_name, float(stored_nearby[field_name]))
+                        except (TypeError, ValueError):
+                            pass
 
         cty = self.pipeline.validator.cty
         compiled = compile_filter(state, callsign, cty)
@@ -180,7 +181,11 @@ class TelnetServer:
             grid=session.grid,
             noise=session.noise,
             dedupe=session.dedupe_policy,
-            nearby={"enabled": session.nearby.enabled, "radius_km": session.nearby.radius_km},
+            nearby={
+                "enabled": session.nearby.enabled,
+                "radius_km": session.nearby.radius_km,
+                "low_band_radius_km": session.nearby.low_band_radius_km,
+            },
         )
         self.user_store.save(session.callsign, record)
 

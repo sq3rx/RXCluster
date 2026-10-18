@@ -23,9 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `NEARBY` is now a session-level feature instead of a filter switch. It
   combines with the other categories using AND (it no longer suspends the
-  geography filters), the radius is configurable (`pipeline.nearby` or
-  `PASS NEARBY <km>`), and `SHOW NEARBY` reports its state. The `nearby` flag
-  moved out of the persisted filter record into a separate record field.
+  geography filters), the radii are configurable (`pipeline.nearby`, or
+  `PASS NEARBY <km> [<low_km>]`), and `SHOW NEARBY` reports its state. The
+  `nearby` flag moved out of the persisted filter record into a separate field.
 - A lone `PASS <CATEGORY> <values>` on an unrestricted exact category (e.g.
   `PASS DXCONT EU`) now reports that it has no effect until the category is
   narrowed with `REJECT <CATEGORY> ALL`, instead of silently reporting success.

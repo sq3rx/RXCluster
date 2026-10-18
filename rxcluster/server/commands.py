@@ -64,15 +64,20 @@ def execute_command(
             dedup_cfg.window_for(policy), dedup_cfg.freq_tolerance_khz
         )
 
-    def _set_nearby(enabled: bool, radius: float | None) -> str:
+    def _set_nearby(enabled: bool, radius: float | None, low_radius: float | None) -> str:
         session.nearby.enabled = enabled
         if radius is not None:
             session.nearby.radius_km = radius
+        if low_radius is not None:
+            session.nearby.low_band_radius_km = low_radius
         if not enabled:
             return "NEARBY off."
         if not is_valid_grid(session.grid):
             return "NEARBY on; set a grid with SET GRID for it to take effect."
-        return f"NEARBY on ({session.nearby.radius_km:g} km)."
+        return (
+            f"NEARBY on ({session.nearby.radius_km:g} km, "
+            f"{session.nearby.low_band_radius_km:g} km on the low bands)."
+        )
 
     def _nearby_info() -> list[str]:
         spec = session.nearby

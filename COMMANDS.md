@@ -64,7 +64,7 @@ See [FILTERS.md](FILTERS.md) for the full category list and semantics.
 | `REJECT <CATEGORY> <values>` | Block values (e.g. `REJECT MODE FT8`) |
 | `PASS/REJECT <CATEGORY> ALL` | Clear / restrict an entire category |
 | `PASS MINSNR <MODE> <dB\|ALL>` | Set a per-mode minimum SNR (e.g. `PASS MINSNR CW 10`) |
-| `PASS/REJECT NEARBY ON\|OFF` | Keep only spots near your grid (requires `SET GRID`); `PASS NEARBY <km>` overrides the radius |
+| `PASS/REJECT NEARBY ON\|OFF` | Keep only spots near your grid (requires `SET GRID`); `PASS NEARBY <km> [<low_km>]` overrides the radius (and the low-band radius) for this session |
 | `PASS/REJECT BEACON\|WWV\|WCY\|ANNOUNCE\|SELF` | Toggle feature switches |
 | `RESET [ALL\|<CATEGORY>\|MINSNR\|NEARBY\|SWITCHES]` | Clear one category or restore the node-level defaults; `CLEAR` is an alias |
 
@@ -163,7 +163,8 @@ PASS EVENT POTA,SOTA,WWFF
 ```text
 SET GRID JO90AA         # validate a Maidenhead locator first
 PASS NEARBY ON          # 700 km, or 1500 km on 160/80/60 m
-PASS NEARBY 1000        # override the radius (km) for this session
+PASS NEARBY 1000        # override the high-band radius (km)
+PASS NEARBY 1000 2000   # override the high-band and low-band radii
 SHOW NEARBY
 PASS NEARBY OFF         # back to the full feed
 ```
