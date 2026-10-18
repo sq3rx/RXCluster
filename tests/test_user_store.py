@@ -13,7 +13,6 @@ def test_filter_state_round_trip():
     parse_command("REJECT MODE FT8", state)
     parse_command("PASS MINSNR CW 10", state)
     parse_command("REJECT DECALL W3*", state)
-    parse_command("PASS NEARBY ON", state)
     parse_command("REJECT BEACON", state)
 
     restored = FilterState.from_dict(state.to_dict())
@@ -24,7 +23,6 @@ def test_filter_state_round_trip():
     assert restored.allow["band"] == {"20m", "40m"}
     assert restored.reject_patterns["decall"] == ["w3*"]
     assert restored.min_snr == {"CW": 10}
-    assert restored.nearby is True
     assert restored.switches["beacon"] is False
 
 

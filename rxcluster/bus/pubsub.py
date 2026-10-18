@@ -17,6 +17,7 @@ import logging
 
 from ..dedup.window import DedupWindow
 from ..filters.compiled import CompiledFilter
+from ..filters.nearby import NearbyFilter
 from ..models import Spot
 
 log = logging.getLogger(__name__)
@@ -25,7 +26,15 @@ log = logging.getLogger(__name__)
 class Subscriber:
     """A connected consumer (telnet client, web socket, ...)."""
 
-    __slots__ = ("name", "filter", "queue", "dropped", "_dedup", "_freq_tolerance")
+    __slots__ = (
+        "name",
+        "filter",
+        "nearby",
+        "queue",
+        "dropped",
+        "_dedup",
+        "_freq_tolerance",
+    )
 
     def __init__(
         self,
@@ -34,13 +43,20 @@ class Subscriber:
         queue_size: int = 5000,
         dedup_window_seconds: float = 0.0,
         freq_tolerance_khz: float = 0.1,
+        nearby: NearbyFilter | None = None,
     ) -> None:
         self.name = name
         self.filter = compiled_filter
+        self.nearby = nearby
         self.queue: asyncio.Queue[str] = asyncio.Queue(maxsize=max(queue_size, 1))
         self.dropped = 0
         self._freq_tolerance = max(freq_tolerance_khz, 1e-6)
         self._dedup = self._make_dedup(dedup_window_seconds)
+
+    @property
+    def nearby_enabled(self) -> bool:
+        """Whether this subscriber's NEARBY filter is active."""
+        return self.nearby is not None and self.nearby.enabled
 
     def _make_dedup(self, window_seconds: float) -> DedupWindow | None:
         if window_seconds <= 0:
@@ -113,6 +129,8 @@ class SpotBus:
         # Iterate over a snapshot: subscribers may disconnect while publishing.
         for sub in tuple(self._subscribers):
             if sub.filter is not None and not sub.filter.allows(spot):
+                continue
+            if sub.nearby is not None and not sub.nearby.allows(spot):
                 continue
             if sub.is_duplicate(spot):
                 suppressed += 1

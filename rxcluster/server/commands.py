@@ -10,12 +10,14 @@ from ..bus.pubsub import Subscriber
 from ..config import Config
 from ..filters.compiled import CompiledFilter, compile_filter
 from ..filters.model import FilterState, default_state_from_config
+from ..filters.nearby import NearbyFilter, NearbySpec
 from ..filters.parser import (
     CommandHandlers,
     CommandResult,
     PostRequest,
     parse_command,
 )
+from ..grid import is_valid_grid
 from ..pipeline import Pipeline
 from ..validate.cty import CtyDatabase
 
@@ -32,11 +34,18 @@ class ClientSession:
     paused_until: float = 0.0
     suppressed: int = 0
     cty: CtyDatabase | None = None
+    nearby: NearbySpec = field(default_factory=NearbySpec)
     persist: Callable[[], None] | None = field(default=None, repr=False, compare=False)
 
     def recompile(self) -> None:
-        self.compiled = compile_filter(self.state, self.callsign, self.grid, self.cty)
+        self.compiled = compile_filter(self.state, self.callsign, self.cty)
         self.subscriber.filter = self.compiled
+        self.subscriber.nearby = NearbyFilter(
+            self.grid,
+            self.nearby,
+            operator_call=self.callsign,
+            bypass_own=self.state.switches.get("self", False),
+        )
 
 
 def execute_command(
@@ -54,6 +63,29 @@ def execute_command(
         session.subscriber.set_dedup_window(
             dedup_cfg.window_for(policy), dedup_cfg.freq_tolerance_khz
         )
+
+    def _set_nearby(enabled: bool, radius: float | None) -> str:
+        session.nearby.enabled = enabled
+        if radius is not None:
+            session.nearby.radius_km = radius
+        if not enabled:
+            return "NEARBY off."
+        if not is_valid_grid(session.grid):
+            return "NEARBY on; set a grid with SET GRID for it to take effect."
+        return f"NEARBY on ({session.nearby.radius_km:g} km)."
+
+    def _nearby_info() -> list[str]:
+        spec = session.nearby
+        grid = session.grid or "not set"
+        low = ",".join(spec.low_bands)
+        lines = [
+            f"NEARBY      {'on' if spec.enabled else 'off'}",
+            f"GRID        {grid}",
+            f"RADIUS      {spec.radius_km:g} km ({spec.low_band_radius_km:g} km on {low})",
+        ]
+        if spec.enabled and not is_valid_grid(session.grid):
+            lines.append("note: NEARBY is inert until a valid grid is set (SET GRID).")
+        return lines
 
     def _hold() -> str:
         remaining = session.paused_until - time.monotonic()
@@ -85,6 +117,8 @@ def execute_command(
         post_handler=_post,
         resume_setter=_resume,
         hold_provider=_hold,
+        nearby_setter=_set_nearby,
+        nearby_provider=_nearby_info,
         default_state_provider=lambda: default_state_from_config(cfg.defaults),
     )
     result = parse_command(line, session.state, handlers)

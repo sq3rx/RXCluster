@@ -21,12 +21,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `NEARBY` is now a session-level feature instead of a filter switch. It
+  combines with the other categories using AND (it no longer suspends the
+  geography filters), the radius is configurable (`pipeline.nearby` or
+  `PASS NEARBY <km>`), and `SHOW NEARBY` reports its state. The `nearby` flag
+  moved out of the persisted filter record into a separate record field.
 - A lone `PASS <CATEGORY> <values>` on an unrestricted exact category (e.g.
   `PASS DXCONT EU`) now reports that it has no effect until the category is
   narrowed with `REJECT <CATEGORY> ALL`, instead of silently reporting success.
 
+### Removed
+
+- The `TOXIC` feature switch was removed. It was inert (nothing in the pipeline
+  ever flagged a spot as toxic), so `REJECT TOXIC` never had an effect. A
+  leftover `switches.toxic` entry in the configuration is accepted and ignored.
+
 ### Fixed
 
+- `cty.dat` stores longitude positive-west but it was used as-is, so every
+  derived locator was mirrored (e.g. Poland `IO02` instead of `JO92`). This
+  made `DXGRID2`/`DEGRID2` wrong and skewed `NEARBY` distances for spots
+  without a source-provided grid.
 - Geography and country filters now work: `cty.dat` continuation lines
   (comma/semicolon lists, `=` overrides and `(...)`/`[...]` annotations) and
   spurious blank lines are parsed correctly, so callsigns such as `W*`, `N*` and

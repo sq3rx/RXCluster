@@ -155,11 +155,21 @@ class EnrichmentConfig(_Base):
     tags: TagsConfig = Field(default_factory=TagsConfig)
 
 
+class NearbyConfig(_Base):
+    # NEARBY keeps spots whose DX or spotter grid is within these radii (km).
+    # The low bands get a wider radius because ground-wave/short-skip reaches
+    # further there.
+    radius_km: float = Field(default=700.0, gt=0)
+    low_band_radius_km: float = Field(default=1500.0, gt=0)
+    low_bands: list[str] = Field(default_factory=lambda: ["160m", "80m", "60m"])
+
+
 class PipelineConfig(_Base):
     raw_queue_size: int = 50000
     dedup: DedupConfig = Field(default_factory=DedupConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
     enrichment: EnrichmentConfig = Field(default_factory=EnrichmentConfig)
+    nearby: NearbyConfig = Field(default_factory=NearbyConfig)
 
 
 class BandConfig(_Base):
@@ -174,7 +184,15 @@ class SwitchConfig(_Base):
     wcy: bool = True
     announce: bool = True
     self: bool = False
-    toxic: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_removed(cls, data: object) -> object:
+        # The ``toxic`` switch was removed in 0.3.0; accept but ignore it so
+        # existing configuration files keep loading.
+        if isinstance(data, dict) and "toxic" in data:
+            return {k: v for k, v in data.items() if k != "toxic"}
+        return data
 
 
 Selection = Literal["all"] | list[str]

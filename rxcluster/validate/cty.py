@@ -66,7 +66,11 @@ class CtyDatabase:
             header = _HEADER_RE.match(raw.rstrip("\r\n"))
             if header:
                 lat = float(header.group("lat"))
-                lon = float(header.group("lon"))
+                # cty.dat stores longitude as positive-west; convert it to the
+                # standard east-positive convention used by the grid helpers,
+                # otherwise grids (and NEARBY distances) come out mirrored,
+                # e.g. Poland IO02 instead of JO92.
+                lon = -float(header.group("lon"))
                 current = CtyEntity(
                     name=header.group("name").strip(),
                     cq_zone=int(header.group("cq")),

@@ -107,6 +107,9 @@ default. Narrow `topic` (e.g. `pskr/filter/v2/20m/FT8/#`) before enabling it.
 | `dedup.freq_tolerance_khz` | `0.1` | Frequency quantization for dedup |
 | `dedup.window_seconds` | `30` | Dedup window fallback for an unknown `SET DEDUPE` policy |
 | `dedup.policies` | `{FAST: 10, MED: 20, SLOW: 30}` | Per-client dedup window (seconds) by `SET DEDUPE` policy |
+| `nearby.radius_km` | `700` | NEARBY radius (km) on the high bands |
+| `nearby.low_band_radius_km` | `1500` | NEARBY radius (km) on the low bands |
+| `nearby.low_bands` | `[160m, 80m, 60m]` | Bands that use the wider NEARBY radius |
 | `validation.scp_enabled` | `true` | Use SCP membership |
 | `validation.patt3ch_enabled` | `true` | Use the patt3ch list |
 | `validation.cty_enabled` | `true` | Resolve geography from cty.dat |

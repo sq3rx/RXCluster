@@ -124,7 +124,6 @@ class Spot:
     # --- Internal bookkeeping ---------------------------------------------
     is_beacon: bool = False
     kind: SpotKind = SpotKind.SPOT
-    toxic: bool = False
 
     def key(self, freq_tolerance_khz: float = 0.1) -> tuple[str, int]:
         """Return a dedup key: normalized callsign + quantized frequency.

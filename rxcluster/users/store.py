@@ -116,6 +116,7 @@ class UserStore:
         grid: str = "",
         noise: str = "SUBURBAN",
         dedupe: str = "SLOW",
+        nearby: dict | None = None,
     ) -> dict:
         """Assemble a versioned record ready for :meth:`save`."""
         return {
@@ -126,4 +127,5 @@ class UserStore:
             "grid": grid,
             "noise": noise,
             "dedupe": dedupe,
+            "nearby": nearby or {"enabled": False},
         }

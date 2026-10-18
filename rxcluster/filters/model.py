@@ -45,7 +45,7 @@ PATTERN_CATEGORIES: tuple[str, ...] = ("dxcall", "decall")
 
 ALL_CATEGORIES: tuple[str, ...] = EXACT_CATEGORIES + PATTERN_CATEGORIES
 
-SWITCH_NAMES: tuple[str, ...] = ("beacon", "wwv", "wcy", "announce", "self", "toxic")
+SWITCH_NAMES: tuple[str, ...] = ("beacon", "wwv", "wcy", "announce", "self")
 
 DEFAULT_SWITCHES: dict[str, bool] = {
     "beacon": False,
@@ -53,7 +53,6 @@ DEFAULT_SWITCHES: dict[str, bool] = {
     "wcy": True,
     "announce": True,
     "self": False,
-    "toxic": False,
 }
 
 
@@ -79,7 +78,6 @@ class FilterState:
     comment_reject: list[str] = field(default_factory=list)
     min_snr: dict[str, int] = field(default_factory=dict)
     switches: dict[str, bool] = field(default_factory=lambda: dict(DEFAULT_SWITCHES))
-    nearby: bool = False
 
     # -- mutations ---------------------------------------------------------
     def add_allow(self, category: str, values: list[str]) -> None:
@@ -140,9 +138,6 @@ class FilterState:
     def set_switch(self, name: str, value: bool) -> None:
         self.switches[name] = value
 
-    def set_nearby(self, value: bool) -> None:
-        self.nearby = value
-
     def set_min_snr(self, mode: str, value: int | None) -> None:
         if value is None:
             self.min_snr.pop(mode, None)
@@ -173,7 +168,6 @@ class FilterState:
             "comment_reject": list(self.comment_reject),
             "min_snr": {k: int(v) for k, v in self.min_snr.items()},
             "switches": {k: bool(v) for k, v in self.switches.items()},
-            "nearby": bool(self.nearby),
         }
 
     @classmethod
@@ -239,10 +233,6 @@ class FilterState:
             for name in SWITCH_NAMES:
                 if name in switches:
                     state.switches[name] = bool(switches[name])
-
-        nearby = data.get("nearby")
-        if isinstance(nearby, bool):
-            state.nearby = nearby
 
         return state
 

@@ -61,26 +61,32 @@ RESET             # back to the node defaults
 | `EVENT` | event tag | `POTA`, `SOTA`, `IOTA`, `WWFF`, `LLOTA` |
 
 Feature switches (enabled with `PASS`, disabled with `REJECT`):
-`BEACON`, `WWV`, `WCY`, `ANNOUNCE`, `SELF`, `TOXIC`.
+`BEACON`, `WWV`, `WCY`, `ANNOUNCE`, `SELF`.
 
 `WWV`, `WCY` and `ANNOUNCE` control propagation bulletins and announcements
 received from CC Cluster sources; `BEACON` hides NCDXF/beacon spots; `SELF`
-controls spots of your own callsign; `TOXIC` hides human spots already flagged
-as toxic (fail-open when nothing is classified).
+controls spots of your own callsign.
 
 ## NEARBY
 
-`PASS NEARBY ON` (requires `SET GRID`) keeps only spots where either the DX
-station or the spotter is near your grid: within 700 km, or 1500 km on 160 m,
-80 m and 60 m. While NEARBY is active the geography categories
-(`DXCONT`/`DECONT`, `DXZONE`/`DEZONE`, `DXDXCC`/`DEDXCC`, `DXGRID2`/`DEGRID2`)
-are suspended; their rules are retained and restored by `PASS NEARBY OFF`.
+NEARBY is a **session-level** feature (it depends on your own grid, not on the
+PASS/REJECT selections). `PASS NEARBY ON` (requires `SET GRID`) keeps only spots
+where either the DX station or the spotter is near your grid: within the
+configured radius (default 700 km, or 1500 km on 160 m, 80 m and 60 m). The
+radii are configurable in `pipeline.nearby` and can be overridden per session
+with `PASS NEARBY <km>`. `SHOW NEARBY` prints the current state, grid and
+radius.
+
+NEARBY is combined with the other categories using **AND**: it does not suspend
+the geography filters, so `REJECT DXCONT ALL` + `PASS DXCONT EU` and `PASS
+NEARBY ON` apply together.
 
 NEARBY is inert (no spots removed) until a valid grid is set: `SET GRID` rejects
 malformed locators, and enabling NEARBY without a grid keeps the full feed with
 a reminder. Once a grid is set, a spot with neither a DX grid nor a spotter grid
 cannot be proven near and is therefore dropped, as is any spot outside the
-radius. `REJECT NEARBY` (or `PASS NEARBY OFF`) switches it back off.
+radius. `REJECT NEARBY` (or `PASS NEARBY OFF`) switches it back off, and
+`RESET NEARBY` clears it.
 
 ## Examples
 

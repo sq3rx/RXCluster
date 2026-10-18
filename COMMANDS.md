@@ -38,6 +38,7 @@ N1MM Logger+ can read the propagation/quality tags from its AMQ window:
 | `SHOW FILTER <CATEGORY>` | Show one category (e.g. `SHOW FILTER BAND`) |
 | `SHOW SETTINGS` | Show your current filter selections |
 | `SHOW DEDUPE` | Show your duplicate-suppression policy |
+| `SHOW NEARBY` | Show NEARBY state, grid and radius |
 | `SHOW HOLD` | Show pause state and how many spots were suppressed |
 | `SHOW PROP <call\|prefix\|grid> [band] [mode]` | Hourly propagation outlook using the node reference `station.operator_grid` |
 | `WHOSPOTSME [band]` | Countries that recently spotted your own callsign |
@@ -63,8 +64,8 @@ See [FILTERS.md](FILTERS.md) for the full category list and semantics.
 | `REJECT <CATEGORY> <values>` | Block values (e.g. `REJECT MODE FT8`) |
 | `PASS/REJECT <CATEGORY> ALL` | Clear / restrict an entire category |
 | `PASS MINSNR <MODE> <dB\|ALL>` | Set a per-mode minimum SNR (e.g. `PASS MINSNR CW 10`) |
-| `PASS/REJECT NEARBY ON\|OFF` | Keep only spots near your grid (requires `SET GRID`) |
-| `PASS/REJECT BEACON\|WWV\|WCY\|ANNOUNCE\|SELF\|TOXIC` | Toggle feature switches |
+| `PASS/REJECT NEARBY ON\|OFF` | Keep only spots near your grid (requires `SET GRID`); `PASS NEARBY <km>` overrides the radius |
+| `PASS/REJECT BEACON\|WWV\|WCY\|ANNOUNCE\|SELF` | Toggle feature switches |
 | `RESET [ALL\|<CATEGORY>\|MINSNR\|NEARBY\|SWITCHES]` | Clear one category or restore the node-level defaults; `CLEAR` is an alias |
 
 ### Session / preferences
@@ -162,7 +163,8 @@ PASS EVENT POTA,SOTA,WWFF
 ```text
 SET GRID JO90AA         # validate a Maidenhead locator first
 PASS NEARBY ON          # 700 km, or 1500 km on 160/80/60 m
-SHOW FILTER
+PASS NEARBY 1000        # override the radius (km) for this session
+SHOW NEARBY
 PASS NEARBY OFF         # back to the full feed
 ```
 
@@ -170,7 +172,6 @@ PASS NEARBY OFF         # back to the full feed
 
 ```text
 REJECT BEACON           # hide NCDXF/beacon spots
-REJECT TOXIC            # hide human spots flagged toxic
 PASS SELF               # show spots of your own callsign
 REJECT WWV              # hide WWV bulletin traffic
 ```

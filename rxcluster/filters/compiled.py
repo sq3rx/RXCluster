@@ -11,22 +11,11 @@ import fnmatch
 import re
 from collections.abc import Hashable
 
-from ..grid import distance_km, grid_to_latlon
 from ..models import SourceType, Spot, SpotKind
 from ..validate.cty import CtyDatabase
 from .model import EXACT_CATEGORIES, FilterState
 
 KNOWN_EVENTS = ("POTA", "SOTA", "IOTA", "WWFF", "LLOTA")
-
-# Geography categories suspended while NEARBY is active.
-GEO_CATEGORIES = frozenset(
-    {"dxcont", "decont", "dxzone", "dezone", "dxdxcc", "dedxcc", "dxgrid2", "degrid2"}
-)
-
-# NEARBY is deliberately broader on the low bands.
-LOW_BANDS = frozenset({"160m", "80m", "60m"})
-NEARBY_RADIUS_LOW_KM = 1500.0
-NEARBY_RADIUS_KM = 700.0
 
 
 def _compile_patterns(patterns: list[str]) -> list[re.Pattern[str]]:
@@ -68,9 +57,6 @@ class CompiledFilter:
         "_min_snr",
         "_switches",
         "_operator",
-        "_operator_grid",
-        "_operator_pos",
-        "_nearby",
         "_dxcc_allow_names",
         "_dxcc_reject_names",
     )
@@ -79,7 +65,6 @@ class CompiledFilter:
         self,
         state: FilterState,
         operator_call: str = "",
-        operator_grid: str = "",
         cty: CtyDatabase | None = None,
     ) -> None:
         self._allow = {
@@ -98,11 +83,6 @@ class CompiledFilter:
         self._min_snr = {m.upper(): v for m, v in state.min_snr.items()}
         self._switches = dict(state.switches)
         self._operator = operator_call.upper()
-        self._operator_grid = operator_grid.strip().upper()
-        self._operator_pos = (
-            grid_to_latlon(self._operator_grid) if self._operator_grid else None
-        )
-        self._nearby = bool(state.nearby)
         # Resolve DXCC/spotter-DXCC values through cty at compile time: an
         # entity name is derived from each prefix so that e.g. REJECT DXDXCC SP
         # also matches SQ9ABC (both resolve to Poland).
@@ -173,22 +153,6 @@ class CompiledFilter:
         # Canonical prefix: match the leading characters of the callsign.
         return any(value and call.startswith(value.upper()) for value in values)
 
-    # -- NEARBY ------------------------------------------------------------
-    def _nearby_pass(self, spot: Spot) -> bool:
-        # Without a valid operator grid NEARBY cannot be evaluated, so it stays
-        # inert rather than black-holing every spot.
-        if self._operator_pos is None:
-            return True
-        radius = NEARBY_RADIUS_LOW_KM if spot.band in LOW_BANDS else NEARBY_RADIUS_KM
-        op_lat, op_lon = self._operator_pos
-        for grid in (spot.dx_grid, spot.spotter_grid):
-            target = grid_to_latlon(grid) if grid else None
-            if target is None:
-                continue
-            if distance_km(op_lat, op_lon, target[0], target[1]) <= radius:
-                return True
-        return False
-
     # -- public predicate --------------------------------------------------
     def allows(self, spot: Spot) -> bool:
         switches = self._switches
@@ -206,23 +170,16 @@ class CompiledFilter:
             "beacon", False
         ):
             return False
-        if spot.toxic and not switches.get("toxic", False):
-            return False
         if self._operator and not switches.get("self", False):
             if spot.dx_call.upper() == self._operator:
                 return False
-        # Own callsign stays visible when SELF is on, regardless of NEARBY.
+        # Own callsign stays visible when SELF is on.
         if self._operator and switches.get("self", False):
             if spot.dx_call.upper() == self._operator:
                 return True
 
-        if self._nearby and not self._nearby_pass(spot):
-            return False
-
         for cat in EXACT_CATEGORIES:
             if cat == "event":
-                continue
-            if self._nearby and cat in GEO_CATEGORIES:
                 continue
             if cat in ("dxdxcc", "dedxcc"):
                 rejected = self._reject.get(cat)
@@ -300,7 +257,6 @@ _intern_cache: dict[Hashable, CompiledFilter] = {}
 def _signature(
     state: FilterState,
     operator_call: str,
-    operator_grid: str,
     cty: CtyDatabase | None,
 ) -> Hashable:
     def _norm(mapping: dict[str, set[str] | None]) -> tuple:
@@ -313,8 +269,6 @@ def _signature(
 
     return (
         operator_call.upper(),
-        operator_grid.strip().upper(),
-        state.nearby,
         id(cty) if cty is not None else None,
         _norm(state.allow),
         _norm(state.reject),
@@ -330,7 +284,6 @@ def _signature(
 def compile_filter(
     state: FilterState,
     operator_call: str = "",
-    operator_grid: str = "",
     cty: CtyDatabase | None = None,
 ) -> CompiledFilter:
     """Compile (and intern) a :class:`CompiledFilter` for the given state.
@@ -339,11 +292,11 @@ def compile_filter(
     values to their entity names; without it those categories match on the
     literal value or the callsign prefix only.
     """
-    sig = _signature(state, operator_call, operator_grid, cty)
+    sig = _signature(state, operator_call, cty)
     cached = _intern_cache.get(sig)
     if cached is not None:
         return cached
-    compiled = CompiledFilter(state, operator_call, operator_grid, cty)
+    compiled = CompiledFilter(state, operator_call, cty)
     _intern_cache[sig] = compiled
     if len(_intern_cache) > 4096:  # simple bound to avoid unbounded growth
         _intern_cache.clear()
@@ -427,8 +380,6 @@ def describe(state: FilterState, category: str | None = None, full: bool = False
             )
         elif full:
             lines.append("MINSNR      None")
-    if _want("nearby"):
-        lines.append(f"{'NEARBY':<12}{'On' if state.nearby else 'Off'}")
     if _want("switches"):
         switches = ", ".join(
             f"{k}={'on' if v else 'off'}" for k, v in sorted(state.switches.items())

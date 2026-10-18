@@ -46,14 +46,6 @@ def test_bulletin_switches():
     assert compile_filter(state).allows(make_spot(kind=SpotKind.WCY))
 
 
-def test_toxic_switch():
-    state = FilterState()
-    parse_command("PASS TOXIC", state)
-    assert compile_filter(state).allows(make_spot(toxic=True))
-    parse_command("REJECT TOXIC", state)
-    assert not compile_filter(state).allows(make_spot(toxic=True))
-
-
 def test_self_switch():
     state = FilterState()
     # Self spots are hidden by default.

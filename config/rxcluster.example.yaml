@@ -93,6 +93,12 @@ pipeline:
     freq_tolerance_khz: 0.1
     window_seconds: 30
     policies: { FAST: 10, MED: 20, SLOW: 30 }
+  nearby:
+    # NEARBY (PASS NEARBY) keeps a spot when its DX or spotter grid is within
+    # these radii (km). The low bands use the wider radius.
+    radius_km: 700
+    low_band_radius_km: 1500
+    low_bands: [160m, 80m, 60m]
   validation:
     scp_enabled: true
     patt3ch_enabled: true
@@ -174,7 +180,6 @@ defaults:
     wcy: true
     announce: true
     self: false
-    toxic: false
 
 data:
   scp_file: data/MASTER.SCP

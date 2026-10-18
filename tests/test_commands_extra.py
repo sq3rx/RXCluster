@@ -1,7 +1,25 @@
 from rxcluster.filters.compiled import compile_filter, describe
 from rxcluster.filters.model import DEFAULT_SWITCHES, FilterState
+from rxcluster.filters.nearby import NearbyFilter, NearbySpec
 from rxcluster.filters.parser import CommandHandlers, parse_command
+from rxcluster.grid import is_valid_grid
 from rxcluster.models import Confidence, Mode, Source, SourceType, Spot
+
+
+def _nearby_handlers(spec: NearbySpec, grid: str) -> CommandHandlers:
+    """Wire the session-level NEARBY callbacks the telnet server provides."""
+
+    def setter(enabled: bool, radius: float | None) -> str:
+        spec.enabled = enabled
+        if radius is not None:
+            spec.radius_km = radius
+        if not enabled:
+            return "NEARBY off."
+        if not is_valid_grid(grid):
+            return "NEARBY on; set a grid with SET GRID for it to take effect."
+        return f"NEARBY on ({spec.radius_km:g} km)."
+
+    return CommandHandlers(operator_grid=grid, nearby_setter=setter)
 
 
 def make_spot(**kwargs) -> Spot:
@@ -113,36 +131,49 @@ def test_dxcc_prefix_and_name():
 
 
 def test_nearby_filter():
-    state = FilterState()
-    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FN31"))
-    assert state.nearby is True
-    compiled = compile_filter(state, "N0CALL", "FN31")
-    assert compiled.allows(make_spot(dx_grid="FN42"))
-    assert not compiled.allows(make_spot(dx_grid="JO90"))
+    spec = NearbySpec()
+    handlers = _nearby_handlers(spec, "FN31")
+    parse_command("PASS NEARBY ON", FilterState(), handlers)
+    assert spec.enabled is True
+    nearby = NearbyFilter("FN31", spec)
+    assert nearby.allows(make_spot(dx_grid="FN42"))
+    assert not nearby.allows(make_spot(dx_grid="JO90"))
 
-    parse_command("PASS NEARBY OFF", state)
-    assert state.nearby is False
+    parse_command("PASS NEARBY OFF", FilterState(), handlers)
+    assert spec.enabled is False
+
+
+def test_nearby_radius_argument():
+    spec = NearbySpec()
+    handlers = _nearby_handlers(spec, "FN31")
+    parse_command("PASS NEARBY 300", FilterState(), handlers)
+    assert spec.enabled is True
+    assert spec.radius_km == 300.0
 
 
 def test_nearby_without_grid_warns():
-    state = FilterState()
-    result = parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid=""))
+    spec = NearbySpec()
+    result = parse_command("PASS NEARBY ON", FilterState(), _nearby_handlers(spec, ""))
     assert "SET GRID" in result.responses[0]
 
 
 def test_nearby_without_grid_is_inert():
-    state = FilterState()
-    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid=""))
-    compiled = compile_filter(state, "N0CALL", "")
-    assert compiled.allows(make_spot(dx_grid="JO90"))
-    assert compiled.allows(make_spot())
+    nearby = NearbyFilter("", NearbySpec(enabled=True))
+    assert nearby.allows(make_spot(dx_grid="JO90"))
+    assert nearby.allows(make_spot())
 
 
 def test_nearby_with_invalid_grid_is_inert():
-    state = FilterState()
-    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FOOBAR"))
-    compiled = compile_filter(state, "N0CALL", "FOOBAR")
-    assert compiled.allows(make_spot(dx_grid="JO90"))
+    nearby = NearbyFilter("FOOBAR", NearbySpec(enabled=True))
+    assert nearby.allows(make_spot(dx_grid="JO90"))
+
+
+def test_nearby_low_band_uses_wider_radius():
+    spec = NearbySpec(enabled=True, radius_km=100.0, low_band_radius_km=2000.0)
+    nearby = NearbyFilter("FN31", spec, "N0CALL")
+    # FN42 is a few hundred km away: out of range on 20m, inside on 80m.
+    assert not nearby.allows(make_spot(dx_grid="FN42", band="20m"))
+    assert nearby.allows(make_spot(dx_grid="FN42", band="80m"))
 
 
 def test_set_grid_rejects_invalid_locator():
@@ -165,33 +196,33 @@ def test_set_grid_accepts_valid_locator():
 
 
 def test_reject_nearby_disables():
-    state = FilterState()
-    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FN31"))
-    assert state.nearby is True
-    parse_command("REJECT NEARBY", state)
-    assert state.nearby is False
+    spec = NearbySpec(enabled=True)
+    handlers = _nearby_handlers(spec, "FN31")
+    parse_command("REJECT NEARBY", FilterState(), handlers)
+    assert spec.enabled is False
 
 
 def test_pass_nearby_false_disables():
-    state = FilterState()
-    result = parse_command("PASS NEARBY FALSE", state, CommandHandlers(operator_grid="FN31"))
-    assert state.nearby is False
+    spec = NearbySpec(enabled=True)
+    result = parse_command("PASS NEARBY FALSE", FilterState(), _nearby_handlers(spec, "FN31"))
+    assert spec.enabled is False
     assert "off" in result.responses[0]
 
 
 def test_self_on_own_call_bypasses_nearby():
     state = FilterState()
     parse_command("PASS SELF", state)
-    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FN31"))
-    compiled = compile_filter(state, "K1ABC", "FN31")
-    assert compiled.allows(make_spot(dx_call="K1ABC", dx_grid="JO90"))
-    assert compiled.allows(make_spot(dx_call="K1ABC"))
+    nearby = NearbyFilter(
+        "FN31", NearbySpec(enabled=True), operator_call="K1ABC", bypass_own=state.switches["self"]
+    )
+    assert nearby.allows(make_spot(dx_call="K1ABC", dx_grid="JO90"))
+    assert nearby.allows(make_spot(dx_call="K1ABC"))
 
 
 def test_self_off_own_call_rejected():
     state = FilterState()
     parse_command("REJECT SELF", state)
-    compiled = compile_filter(state, "K1ABC", "FN31")
+    compiled = compile_filter(state, "K1ABC")
     assert not compiled.allows(make_spot(dx_call="K1ABC"))
 
 
@@ -234,16 +265,17 @@ def test_reset_category_clears_only_that_category():
 
 def test_reset_all_without_defaults_clears_everything():
     state = FilterState()
+    spec = NearbySpec(enabled=True)
+    handlers = _nearby_handlers(spec, "FN31")
     parse_command("REJECT BAND 40m", state)
     parse_command("REJECT DXCONT EU", state)
     parse_command("PASS MINSNR CW 10", state)
-    parse_command("PASS NEARBY ON", state, CommandHandlers(operator_grid="FN31"))
     parse_command("REJECT BEACON", state)
-    parse_command("RESET", state)
+    parse_command("RESET", state, handlers)
     assert state.reject["band"] == set()
     assert state.reject["dxcont"] == set()
     assert state.min_snr == {}
-    assert state.nearby is False
+    assert spec.enabled is False
     assert state.switches == DEFAULT_SWITCHES
 
 
@@ -266,3 +298,52 @@ def test_describe_category_and_full():
     state = FilterState()
     assert "BAND" in describe(state, "band")
     assert "SWITCHES" in describe(state, full=True)
+
+
+class _StubPipeline:
+    def recent(self, count):
+        return []
+
+    def recent_for(self, call, count):
+        return []
+
+    def prop_outlook(self, target, band, mode):
+        return []
+
+    def who_spots_me(self, band, call):
+        return []
+
+    def post_manual(self, callsign, request):
+        return "n/a"
+
+
+def test_session_nearby_via_execute_command():
+    from rxcluster.bus.pubsub import Subscriber
+    from rxcluster.config import Config
+    from rxcluster.server.commands import ClientSession, execute_command
+
+    cfg = Config()
+    state = FilterState()
+    subscriber = Subscriber("SQ9ABC", compile_filter(state, "SQ9ABC"))
+    session = ClientSession(
+        callsign="SQ9ABC",
+        state=state,
+        compiled=subscriber.filter,
+        subscriber=subscriber,
+        grid="JO90AA",
+        nearby=NearbySpec.from_config(cfg.pipeline.nearby),
+    )
+    pipeline = _StubPipeline()
+
+    execute_command("PASS NEARBY ON", session, cfg, pipeline)
+    assert session.nearby.enabled is True
+    assert subscriber.nearby is not None and subscriber.nearby.enabled is True
+
+    result = execute_command("SHOW NEARBY", session, cfg, pipeline)
+    assert any("NEARBY" in line for line in result.responses)
+
+    execute_command("PASS NEARBY 500", session, cfg, pipeline)
+    assert session.nearby.radius_km == 500.0
+
+    execute_command("REJECT NEARBY", session, cfg, pipeline)
+    assert session.nearby.enabled is False

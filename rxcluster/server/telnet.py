@@ -20,6 +20,7 @@ from ..bus.pubsub import SpotBus, Subscriber
 from ..config import Config, UserStoreConfig
 from ..filters.compiled import compile_filter
 from ..filters.model import FilterState, default_state_from_config
+from ..filters.nearby import NearbyFilter, NearbySpec
 from ..pipeline import Pipeline
 from ..users.store import UserStore
 from .commands import ClientSession, execute_command
@@ -90,17 +91,33 @@ class TelnetServer:
         grid = self.cfg.station.operator_grid
         noise = self.cfg.station.noise_class
         dedupe = "SLOW"
+        nearby = NearbySpec.from_config(self.cfg.pipeline.nearby)
         record = self.user_store.load(callsign)
         if record:
             stored_filter = record.get("filter")
             if isinstance(stored_filter, dict):
                 state = FilterState.from_dict(stored_filter)
+                # Migrate the pre-0.3.0 NEARBY flag that lived in the filter.
+                if stored_filter.get("nearby") is True:
+                    nearby.enabled = True
             grid = str(record.get("grid", grid))
             noise = str(record.get("noise", noise))
             dedupe = str(record.get("dedupe", dedupe))
+            stored_nearby = record.get("nearby")
+            if isinstance(stored_nearby, dict):
+                if "enabled" in stored_nearby:
+                    nearby.enabled = bool(stored_nearby["enabled"])
+                if "radius_km" in stored_nearby:
+                    try:
+                        nearby.radius_km = float(stored_nearby["radius_km"])
+                    except (TypeError, ValueError):
+                        pass
 
         cty = self.pipeline.validator.cty
-        compiled = compile_filter(state, callsign, grid, cty)
+        compiled = compile_filter(state, callsign, cty)
+        nearby_filter = NearbyFilter(
+            grid, nearby, operator_call=callsign, bypass_own=state.switches.get("self", False)
+        )
         dedup_cfg = self.cfg.pipeline.dedup
         subscriber = Subscriber(
             callsign,
@@ -108,6 +125,7 @@ class TelnetServer:
             tcfg.client_queue_size,
             dedup_window_seconds=dedup_cfg.window_for(dedupe),
             freq_tolerance_khz=dedup_cfg.freq_tolerance_khz,
+            nearby=nearby_filter,
         )
         self.bus.subscribe(subscriber)
 
@@ -120,6 +138,7 @@ class TelnetServer:
             noise=noise,
             dedupe_policy=dedupe,
             cty=cty,
+            nearby=nearby,
         )
         session.persist = lambda: self._persist(session)
         self._clients.add(session)
@@ -161,6 +180,7 @@ class TelnetServer:
             grid=session.grid,
             noise=session.noise,
             dedupe=session.dedupe_policy,
+            nearby={"enabled": session.nearby.enabled, "radius_km": session.nearby.radius_km},
         )
         self.user_store.save(session.callsign, record)
 
