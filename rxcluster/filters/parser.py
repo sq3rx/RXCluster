@@ -60,6 +60,19 @@ _POST_COMMENT_RE = re.compile(r"^[A-Za-z0-9 /#@\-.,*?_]*$")
 
 _DEDUPE_POLICIES = ("FAST", "MED", "SLOW")
 
+# Mode tokens accepted by SH/DX and their canonical Mode value. USB/LSB are
+# rendered on the wire for SSB, so they map back to SSB for searching.
+_SHOW_MODE_TOKENS: dict[str, str] = {
+    "CW": "CW",
+    "RTTY": "RTTY",
+    "PSK": "PSK",
+    "FT8": "FT8",
+    "FT4": "FT4",
+    "SSB": "SSB",
+    "USB": "SSB",
+    "LSB": "SSB",
+}
+
 
 @dataclass
 class PostRequest:
@@ -68,6 +81,16 @@ class PostRequest:
     freq_khz: float
     dx_call: str
     comment: str
+
+
+@dataclass
+class DxQuery:
+    """A parsed ``SH/DX`` (``SHOW DX``) read-back query."""
+
+    count: int = 10
+    dx_call: str = ""
+    band: str = ""
+    mode: str = ""
 
 
 @dataclass
@@ -88,6 +111,11 @@ class CommandHandlers:
     operator_grid: str = ""
     recent_provider: Callable[[int], list[str]] | None = None
     recent_for_provider: Callable[[str, int], list[str]] | None = None
+    # ``dx_provider`` handles the full ``SH/DX`` grammar (count, call/prefix,
+    # band, mode); it is preferred over the two legacy providers above.
+    dx_provider: Callable[[DxQuery], list[str]] | None = None
+    # Band names accepted in ``SH/DX <band>`` (from the node band plan).
+    band_names: frozenset[str] = frozenset()
     grid_setter: Callable[[str], None] | None = None
     noise_setter: Callable[[str], None] | None = None
     dedupe_setter: Callable[[str], None] | None = None
@@ -475,6 +503,26 @@ def _parse_set(args: list[str], state: FilterState, h: CommandHandlers) -> Comma
     return CommandResult(handled=True, responses=[f"SET {sub}: acknowledged."])
 
 
+def _parse_dx_query(args: list[str], band_names: frozenset[str]) -> DxQuery:
+    """Parse ``SH/DX [<n>] [<call|prefix>] [<band>] [<mode>]`` argument order-free."""
+    query = DxQuery()
+    for token in args:
+        if token.isdigit():
+            query.count = int(token)
+            continue
+        band = _normalize_band(token)
+        if band in band_names:
+            query.band = band
+            continue
+        mode = _SHOW_MODE_TOKENS.get(token.upper())
+        if mode is not None:
+            query.mode = mode
+            continue
+        if not query.dx_call:
+            query.dx_call = token.upper()
+    return query
+
+
 def _parse_show(args: list[str], state: FilterState, h: CommandHandlers) -> CommandResult:
     sub = args[0].upper() if args else "DX"
     rest = args[1:]
@@ -515,18 +563,17 @@ def _parse_show(args: list[str], state: FilterState, h: CommandHandlers) -> Comm
         )
 
     if sub in ("DX", "MYDX"):
-        call = ""
-        count = 10
-        for token in rest:
-            if token.isdigit():
-                count = int(token)
-            elif not call:
-                call = token
-        if call and h.recent_for_provider is not None:
-            return CommandResult(handled=True, responses=h.recent_for_provider(call, count))
-        if h.recent_provider is not None:
-            return CommandResult(handled=True, responses=h.recent_provider(count))
-        return CommandResult(handled=True, responses=["No recent spots."])
+        query = _parse_dx_query(rest, h.band_names)
+        responses: list[str] | None = None
+        if h.dx_provider is not None:
+            responses = h.dx_provider(query)
+        elif query.dx_call and h.recent_for_provider is not None:
+            responses = h.recent_for_provider(query.dx_call, query.count)
+        elif h.recent_provider is not None:
+            responses = h.recent_provider(query.count)
+        if not responses:
+            return CommandResult(handled=True, responses=["No spots available."])
+        return CommandResult(handled=True, responses=responses)
 
     if sub == "DEDUPE":
         policy = h.dedupe_provider() if h.dedupe_provider is not None else "SLOW"
@@ -611,8 +658,10 @@ def _parse_help(args: list[str]) -> CommandResult:
             "REJECT wins over PASS within a category."
         ),
         "SHOW": (
-            "SHOW DX [call] [n] | SHOW FILTER [FULL|<CATEGORY>] | SHOW SETTINGS\n"
-            "SHOW DEDUPE | SHOW NEARBY | SHOW HOLD | SHOW PROP <call|prefix|grid> [band] [mode]"
+            "SHOW DX [call|prefix] [band] [mode] [n]  (alias SH/DX)  Show recent\n"
+            "spots matching your filters. SHOW FILTER [FULL|<CATEGORY>] |\n"
+            "SHOW SETTINGS | SHOW DEDUPE | SHOW NEARBY | SHOW HOLD |\n"
+            "SHOW PROP <call|prefix|grid> [band] [mode]"
         ),
         "SET": "SET GRID <locator> | SET NOISE <class> | SET DEDUPE <FAST|MED|SLOW>",
         "RESET": (
@@ -634,7 +683,8 @@ def _help_text() -> str:
         "  PASS/REJECT BEACON|WWV|WCY|ANNOUNCE|SELF\n"
         "  PASS MINSNR <MODE> <dB|ALL> | PASS NEARBY ON|OFF|<km> [<low_km>]\n"
         "  DX <freq_khz> <call> [comment]\n"
-        "  SHOW DX [call] [n] | SHOW FILTER [FULL|<CAT>] | SHOW SETTINGS\n"
+        "  SHOW DX [call|prefix] [band] [mode] [n] (alias SH/DX)\n"
+        "  SHOW FILTER [FULL|<CAT>] | SHOW SETTINGS\n"
         "  SHOW DEDUPE | SHOW NEARBY | SHOW HOLD\n"
         "  SHOW PROP <call|prefix|grid> [band] [mode] | WHOSPOTSME [band]\n"
         "  PAUSE [seconds] | RESUME\n"

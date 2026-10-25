@@ -1,7 +1,7 @@
 from rxcluster.filters.compiled import compile_filter, describe
 from rxcluster.filters.model import DEFAULT_SWITCHES, FilterState
 from rxcluster.filters.nearby import NearbyFilter, NearbySpec
-from rxcluster.filters.parser import CommandHandlers, parse_command
+from rxcluster.filters.parser import CommandHandlers, DxQuery, parse_command
 from rxcluster.grid import is_valid_grid
 from rxcluster.models import Confidence, Mode, Source, SourceType, Spot
 
@@ -39,6 +39,40 @@ def make_spot(**kwargs) -> Spot:
     )
     base.update(kwargs)
     return Spot(**base)
+
+
+def test_sh_slash_dx_parses_query():
+    captured: list[DxQuery] = []
+
+    def provider(query: DxQuery) -> list[str]:
+        captured.append(query)
+        return ["DX de W1ABC: 7005.00 K1ABC CW"]
+
+    handlers = CommandHandlers(
+        dx_provider=provider,
+        band_names=frozenset({"20m", "40m"}),
+    )
+    result = parse_command("SH/DX 5 K1ABC 20m CW", FilterState(), handlers)
+    assert captured == [DxQuery(count=5, dx_call="K1ABC", band="20m", mode="CW")]
+    assert result.responses == ["DX de W1ABC: 7005.00 K1ABC CW"]
+
+    captured.clear()
+    parse_command("SHOW DX DL 40m 3", FilterState(), handlers)
+    assert captured == [DxQuery(count=3, dx_call="DL", band="40m", mode="")]
+
+
+def test_sh_slash_dx_alias_and_bare():
+    captured: list[DxQuery] = []
+    handlers = CommandHandlers(dx_provider=lambda q: captured.append(q) or ["x"])
+    parse_command("SH/DX/10", FilterState(), handlers)
+    parse_command("sh/dx", FilterState(), handlers)
+    assert captured == [DxQuery(count=10), DxQuery(count=10)]
+
+
+def test_sh_slash_dx_never_silent():
+    handlers = CommandHandlers(dx_provider=lambda q: [])
+    result = parse_command("SH/DX", FilterState(), handlers)
+    assert result.responses == ["No spots available."]
 
 
 def test_unknown_command_hint():

@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `SHOW DX` / `SH/DX` accept an optional callsign or prefix, band and mode
+  (`SH/DX DL 20m CW`), matched case-insensitively; prefix and `*`/`?` wildcard
+  matching is supported.
+
+### Fixed
+
+- `SHOW DX` / `SH/DX` now return only spots that pass the requesting client's
+  filters (and NEARBY), matching the documented behaviour, instead of the
+  unfiltered node-wide history.
+- `SH/DX` no longer replies with nothing when there are no matches: it answers
+  `No spots available.` (N1MM Logger+'s `SH/DX` appeared to be accepted but
+  produced no output).
+
 ## [0.3.0] - 2026-10-18
 
 ### Added

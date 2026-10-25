@@ -30,6 +30,78 @@ def build_app(user_store: UserStore | None = None) -> tuple[Config, Pipeline, Te
     return cfg, pipeline, server
 
 
+def _spot(dx_call: str, freq_khz: float, mode: Mode) -> Spot:
+    return Spot(
+        source=Source.RBN,
+        source_type=SourceType.SKIMMER,
+        spotter="W3LPL",
+        dx_call=dx_call,
+        freq_khz=freq_khz,
+        timestamp=0.0,
+        mode=mode,
+    )
+
+
+def test_recent_search_prefix_band_mode_and_predicate():
+    _cfg, pipeline, _server = build_app()
+    pipeline.process(_spot("K1ABC", 7005.0, Mode.CW))
+    pipeline.process(_spot("DL1ABC", 14025.0, Mode.CW))
+    pipeline.process(_spot("W1XYZ", 14074.0, Mode.FT8))
+
+    assert len(pipeline.recent_search(count=10)) == 3
+    assert len(pipeline.recent_search(count=2)) == 2
+
+    dl = pipeline.recent_search(dx_call="DL", band="20m", mode="CW")
+    assert len(dl) == 1 and "DL1ABC" in dl[0]
+
+    assert len(pipeline.recent_search(dx_call="DL1")) == 1
+    assert len(pipeline.recent_search(dx_call="*ABC")) == 2
+    assert pipeline.recent_search(dx_call="N0CALL") == []
+
+    only_40 = pipeline.recent_search(predicate=lambda s: s.band == "40m")
+    assert len(only_40) == 1 and "K1ABC" in only_40[0]
+
+
+@pytest.mark.asyncio
+async def test_telnet_sh_dx_filtered_per_user():
+    _cfg, pipeline, server = build_app()
+    await server.start()
+    port = server._server.sockets[0].getsockname()[1]
+
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    try:
+        await asyncio.wait_for(reader.readline(), 2)
+        writer.write(b"N0CALL\n")
+        await writer.drain()
+        await asyncio.wait_for(reader.readline(), 2)
+
+        pipeline.process(_spot("K1ABC", 7005.0, Mode.CW))  # 40m
+        pipeline.process(_spot("DL1ABC", 14025.0, Mode.CW))  # 20m
+        await asyncio.sleep(0.2)
+
+        writer.write(b"REJECT BAND 40m\n")
+        await writer.drain()
+        await _read_until(reader, b"REJECT BAND")
+
+        writer.write(b"SH/DX\n")
+        await writer.drain()
+        reply = await _read_until(reader, b"DL1ABC")
+        assert b"DL1ABC" in reply
+        assert b"K1ABC" not in reply
+
+        writer.write(b"SH/DX K1ABC\n")
+        await writer.drain()
+        empty = await _read_until(reader, b"No spots available.")
+        assert b"No spots available." in empty
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        await server.stop()
+
+
 @pytest.mark.asyncio
 async def test_telnet_streams_spot():
     _cfg, pipeline, server = build_app()

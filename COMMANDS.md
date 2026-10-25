@@ -31,8 +31,8 @@ N1MM Logger+ can read the propagation/quality tags from its AMQ window:
 
 | Command | Description |
 | --- | --- |
-| `SHOW DX [n]` / `SHOW MYDX [n]` | Show the most recent `n` spots matching your filters (default 10) |
-| `SHOW DX <call> [n]` | Show recent spots for one DX station |
+| `SHOW DX [n]` / `SHOW MYDX [n]` / `SH/DX [n]` | Show the most recent `n` spots matching your filters (default 10) |
+| `SHOW DX <call\|prefix> [band] [mode] [n]` | Show recent spots for a DX callsign or prefix (e.g. `SH/DX DL 20m CW 5`) |
 | `SHOW FILTER` | Show your current filter selections |
 | `SHOW FILTER FULL` | Show the complete effective selections, including switches |
 | `SHOW FILTER <CATEGORY>` | Show one category (e.g. `SHOW FILTER BAND`) |
@@ -45,6 +45,12 @@ N1MM Logger+ can read the propagation/quality tags from its AMQ window:
 
 Read-backs (`SHOW FILTER`, `SHOW SETTINGS`, `SHOW PROP`) pause live spots for
 30 s so the reply is readable; type `RESUME` when ready.
+
+`SHOW DX` / `SH/DX` reads from the node's recent-spot memory (the last spots
+seen by the pipeline) and honours **your filters and NEARBY**, so the reply is
+exactly the subset you would receive live. If nothing matches (or the node has
+no recent spots yet), it answers `No spots available.` N1MM Logger+'s `SH/DX`
+button works out of the box.
 
 ### Posting spots
 
@@ -191,7 +197,8 @@ SET NOISE URBAN         # receive-noise class used for VOACAP
 ```text
 DX 7001.0 K1ABC CW up 599      # post a spot you heard
 SHOW DX 20                     # last 20 spots matching your filters
-SHOW DX K1ABC 5                # last 5 spots of K1ABC
+SH/DX K1ABC 5                  # last 5 spots of K1ABC (prefix match)
+SH/DX DL 20m CW                # EU Germany on 20 m CW
 SHOW PROP K1ABC 20m CW         # 24 h propagation outlook
 WHOSPOTSME 20m                 # countries that recently spotted you
 PAUSE                          # pause the live feed for 30 s

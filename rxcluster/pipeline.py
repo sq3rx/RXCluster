@@ -7,9 +7,11 @@ asyncio task, so all stages can be non-thread-safe.
 
 from __future__ import annotations
 
+import fnmatch
 import re
 import time
 from collections import deque
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from .bus.pubsub import SpotBus
@@ -21,6 +23,16 @@ from .parse.freq import BandPlan
 from .validate.validator import Validator
 
 _GRID_RE = re.compile(r"^[A-Z]{2}[0-9]{2}[A-Z]{0,2}$")
+
+
+def _call_matches(dx_call: str, token: str) -> bool:
+    """Match a DX callsign against a search token (prefix or glob)."""
+    call = dx_call.upper()
+    if not token:
+        return True
+    if "*" in token or "?" in token:
+        return fnmatch.fnmatch(call, token)
+    return call.startswith(token)
 
 
 class Pipeline:
@@ -99,6 +111,43 @@ class Pipeline:
         call = dx_call.upper()
         matches = [line for spot, line in self._history if spot.dx_call.upper() == call]
         return matches[-count:]
+
+    def recent_search(
+        self,
+        count: int = 10,
+        dx_call: str = "",
+        band: str = "",
+        mode: str = "",
+        predicate: Callable[[Spot], bool] | None = None,
+    ) -> list[str]:
+        """Return up to ``count`` recent rendered lines matching a DX query.
+
+        ``dx_call`` is matched as a callsign prefix (wildcards ``*``/``?`` are
+        honoured), ``band`` and ``mode`` as exact case-insensitive matches.
+        ``predicate`` is the requesting client's effective visibility test
+        (compiled filter plus NEARBY), so the reply reflects what that client
+        would receive live. Lines are returned oldest-first.
+        """
+        call = dx_call.upper().strip()
+        band_key = band.strip().lower()
+        mode_key = mode.strip().upper()
+        if count <= 0:
+            return []
+        matches: list[str] = []
+        for spot, line in reversed(self._history):
+            if predicate is not None and not predicate(spot):
+                continue
+            if call and not _call_matches(spot.dx_call, call):
+                continue
+            if band_key and spot.band.lower() != band_key:
+                continue
+            if mode_key and spot.mode.value.upper() != mode_key:
+                continue
+            matches.append(line)
+            if len(matches) >= count:
+                break
+        matches.reverse()
+        return matches
 
     def who_spots_me(self, band: str, operator_call: str) -> list[str]:
         """Summarise the countries that have recently spotted ``operator_call``."""

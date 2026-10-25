@@ -14,6 +14,7 @@ from ..filters.nearby import NearbyFilter, NearbySpec
 from ..filters.parser import (
     CommandHandlers,
     CommandResult,
+    DxQuery,
     PostRequest,
     parse_command,
 )
@@ -108,11 +109,30 @@ def execute_command(
     def _post(request: PostRequest) -> str:
         return pipeline.post_manual(session.callsign, request)
 
+    def _visible(spot) -> bool:
+        if not session.compiled.allows(spot):
+            return False
+        nearby = session.subscriber.nearby
+        return not (nearby is not None and not nearby.allows(spot))
+
+    def _dx_query(query: DxQuery) -> list[str]:
+        return pipeline.recent_search(
+            count=query.count,
+            dx_call=query.dx_call,
+            band=query.band,
+            mode=query.mode,
+            predicate=_visible,
+        )
+
+    band_names = frozenset(name.lower() for _, _, name in cfg.band_ranges)
+
     handlers = CommandHandlers(
         operator_call=session.callsign,
         operator_grid=session.grid,
         recent_provider=pipeline.recent,
         recent_for_provider=pipeline.recent_for,
+        dx_provider=_dx_query,
+        band_names=band_names,
         grid_setter=_set_grid,
         noise_setter=_set_noise,
         dedupe_setter=_set_dedupe,
