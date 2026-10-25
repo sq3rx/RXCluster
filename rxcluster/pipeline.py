@@ -18,8 +18,10 @@ from .bus.pubsub import SpotBus
 from .config import PipelineConfig
 from .enrich.enricher import Enricher
 from .enrich.voacap.voacapl import BAND_FREQ_INDEX, FREQS_MHZ
+from .grid import grid_to_latlon
 from .models import PATH_SYMBOL, PathClass, Source, SourceType, Spot, SpotKind, SpotStats
 from .parse.freq import BandPlan
+from .sun import sunrise_sunset
 from .validate.validator import Validator
 
 _GRID_RE = re.compile(r"^[A-Z]{2}[0-9]{2}[A-Z]{0,2}$")
@@ -118,12 +120,17 @@ class Pipeline:
         dx_call: str = "",
         band: str = "",
         mode: str = "",
+        freq_low_khz: float | None = None,
+        freq_high_khz: float | None = None,
         predicate: Callable[[Spot], bool] | None = None,
     ) -> list[str]:
         """Return up to ``count`` recent rendered lines matching a DX query.
 
         ``dx_call`` is matched as a callsign prefix (wildcards ``*``/``?`` are
         honoured), ``band`` and ``mode`` as exact case-insensitive matches.
+        ``freq_low_khz``/``freq_high_khz`` select a frequency window; a single
+        value (``low == high``) is resolved to its band when possible, otherwise
+        broadened to a small window around it (DX Spider ``on <freq>``).
         ``predicate`` is the requesting client's effective visibility test
         (compiled filter plus NEARBY), so the reply reflects what that client
         would receive live. Lines are returned oldest-first.
@@ -133,6 +140,19 @@ class Pipeline:
         mode_key = mode.strip().upper()
         if count <= 0:
             return []
+
+        if freq_low_khz is not None:
+            if freq_high_khz is None:
+                freq_high_khz = freq_low_khz
+            if freq_low_khz == freq_high_khz:
+                resolved = self.band_plan.band_for_freq(freq_low_khz)
+                if resolved:
+                    band_key = band_key or resolved.lower()
+                    freq_low_khz = freq_high_khz = None
+                else:
+                    freq_low_khz -= 2.5
+                    freq_high_khz += 2.5
+
         matches: list[str] = []
         for spot, line in reversed(self._history):
             if predicate is not None and not predicate(spot):
@@ -143,11 +163,41 @@ class Pipeline:
                 continue
             if mode_key and spot.mode.value.upper() != mode_key:
                 continue
+            if freq_low_khz is not None and not (
+                freq_low_khz <= spot.freq_khz <= (freq_high_khz or freq_low_khz)
+            ):
+                continue
             matches.append(line)
             if len(matches) >= count:
                 break
         matches.reverse()
         return matches
+
+    def sun_times(self, target: str) -> list[str]:
+        """Return sunrise/sunset lines for a callsign/prefix/grid (``SH/SUN``)."""
+        candidate = (target or "").strip().upper()
+        if not candidate:
+            return ["SH/SUN <callsign|prefix|grid>: missing target."]
+
+        label = candidate
+        grid = candidate if _GRID_RE.match(candidate) else ""
+        latlon = grid_to_latlon(grid) if grid else None
+        if latlon is None:
+            entity = self.validator.cty.lookup(candidate)
+            if entity is None:
+                return [f"SH/SUN: could not resolve {candidate!r}."]
+            label = entity.name
+            latlon = (entity.lat, entity.lon)
+            grid = entity.grid
+
+        lat, lon = latlon
+        sunrise, sunset = sunrise_sunset(lat, lon)
+        sr = sunrise.strftime("%H:%MZ") if sunrise else "---- (polar night)"
+        ss = sunset.strftime("%H:%MZ") if sunset else "---- (midnight sun)"
+        return [
+            f"SUN {label} ({grid}) lat={lat:+.1f} lon={lon:+.1f}",
+            f"  SUNRISE {sr}  SUNSET {ss}",
+        ]
 
     def who_spots_me(self, band: str, operator_call: str) -> list[str]:
         """Summarise the countries that have recently spotted ``operator_call``."""

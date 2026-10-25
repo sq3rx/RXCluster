@@ -121,6 +121,8 @@ def execute_command(
             dx_call=query.dx_call,
             band=query.band,
             mode=query.mode,
+            freq_low_khz=query.freq_low_khz,
+            freq_high_khz=query.freq_high_khz,
             predicate=_visible,
         )
 
@@ -133,6 +135,7 @@ def execute_command(
         recent_for_provider=pipeline.recent_for,
         dx_provider=_dx_query,
         band_names=band_names,
+        sun_provider=getattr(pipeline, "sun_times", None),
         grid_setter=_set_grid,
         noise_setter=_set_noise,
         dedupe_setter=_set_dedupe,

@@ -75,6 +75,28 @@ def test_sh_slash_dx_never_silent():
     assert result.responses == ["No spots available."]
 
 
+def test_sh_slash_dx_frequency_window():
+    captured: list[DxQuery] = []
+    handlers = CommandHandlers(dx_provider=lambda q: captured.append(q) or ["x"])
+    parse_command("sh/dx/30 on 14000/14350", FilterState(), handlers)
+    assert captured == [DxQuery(count=30, freq_low_khz=14000.0, freq_high_khz=14350.0)]
+
+    captured.clear()
+    parse_command("SH/DX on 14025", FilterState(), handlers)
+    assert captured == [DxQuery(count=10, freq_low_khz=14025.0, freq_high_khz=14025.0)]
+
+
+def test_sh_slash_sun():
+    captured: list[str] = []
+    handlers = CommandHandlers(
+        operator_call="N0CALL",
+        sun_provider=lambda t: captured.append(t) or ["SUN ..."],
+    )
+    parse_command("sh/sun SP", FilterState(), handlers)
+    parse_command("SH/SUN", FilterState(), handlers)
+    assert captured == ["SP", "N0CALL"]
+
+
 def test_unknown_command_hint():
     result = parse_command("FROBNICATE", FilterState())
     assert result.handled

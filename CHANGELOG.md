@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SHOW DX` / `SH/DX` accept an optional callsign or prefix, band and mode
   (`SH/DX DL 20m CW`), matched case-insensitively; prefix and `*`/`?` wildcard
   matching is supported.
+- `SHOW DX` / `SH/DX` accept the DX Spider frequency window `on <khz>[/<khz>]`
+  (`SH/DX/30 on 14000/14350`); a single frequency is resolved to its band.
+- `SHOW SUN [<call|prefix|grid>]` reports sunrise/sunset (UTC) for a DXCC entity
+  or grid locator.
 
 ### Fixed
 

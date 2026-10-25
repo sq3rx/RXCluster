@@ -33,6 +33,8 @@ N1MM Logger+ can read the propagation/quality tags from its AMQ window:
 | --- | --- |
 | `SHOW DX [n]` / `SHOW MYDX [n]` / `SH/DX [n]` | Show the most recent `n` spots matching your filters (default 10) |
 | `SHOW DX <call\|prefix> [band] [mode] [n]` | Show recent spots for a DX callsign or prefix (e.g. `SH/DX DL 20m CW 5`) |
+| `SHOW DX [n] on <khz>[/<khz>]` | Restrict to a frequency window (e.g. `SH/DX/30 on 14000/14350`); a single value resolves to its band |
+| `SHOW SUN [<call\|prefix\|grid>]` | Sunrise/sunset (UTC) for a DXCC entity or grid; defaults to your callsign |
 | `SHOW FILTER` | Show your current filter selections |
 | `SHOW FILTER FULL` | Show the complete effective selections, including switches |
 | `SHOW FILTER <CATEGORY>` | Show one category (e.g. `SHOW FILTER BAND`) |
@@ -50,7 +52,8 @@ Read-backs (`SHOW FILTER`, `SHOW SETTINGS`, `SHOW PROP`) pause live spots for
 seen by the pipeline) and honours **your filters and NEARBY**, so the reply is
 exactly the subset you would receive live. If nothing matches (or the node has
 no recent spots yet), it answers `No spots available.` N1MM Logger+'s `SH/DX`
-button works out of the box.
+button works out of the box, including the DX Spider forms `SH/DX/30 on
+14000/14350` and `SH/SUN <prefix>`.
 
 ### Posting spots
 
@@ -199,6 +202,8 @@ DX 7001.0 K1ABC CW up 599      # post a spot you heard
 SHOW DX 20                     # last 20 spots matching your filters
 SH/DX K1ABC 5                  # last 5 spots of K1ABC (prefix match)
 SH/DX DL 20m CW                # EU Germany on 20 m CW
+SH/DX/30 on 14000/14350        # last 30 spots between 14000 and 14350 kHz
+SH/SUN SP                      # sunrise/sunset for the SP prefix
 SHOW PROP K1ABC 20m CW         # 24 h propagation outlook
 WHOSPOTSME 20m                 # countries that recently spotted you
 PAUSE                          # pause the live feed for 30 s

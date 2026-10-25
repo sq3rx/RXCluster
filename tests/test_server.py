@@ -62,6 +62,29 @@ def test_recent_search_prefix_band_mode_and_predicate():
     assert len(only_40) == 1 and "K1ABC" in only_40[0]
 
 
+def test_recent_search_frequency_window_resolves_band():
+    _cfg, pipeline, _server = build_app()
+    pipeline.process(_spot("K1ABC", 14025.0, Mode.CW))
+    pipeline.process(_spot("DL1ABC", 14200.0, Mode.CW))
+    pipeline.process(_spot("SP1ABC", 7005.0, Mode.CW))
+
+    window = pipeline.recent_search(freq_low_khz=14000.0, freq_high_khz=14350.0)
+    assert len(window) == 2
+    assert pipeline.recent_search(freq_low_khz=13000.0, freq_high_khz=13900.0) == []
+
+    # A single frequency resolves to its band (DX Spider "on <freq>").
+    assert len(pipeline.recent_search(freq_low_khz=14025.0)) == 2
+
+
+def test_sun_times_grid_and_unresolved():
+    _cfg, pipeline, _server = build_app()
+    lines = pipeline.sun_times("JO90AA")
+    assert any("SUNRISE" in line for line in lines)
+
+    assert "could not resolve" in pipeline.sun_times("ZZZZZZ")[0].lower()
+    assert "missing target" in pipeline.sun_times("")[0].lower()
+
+
 @pytest.mark.asyncio
 async def test_telnet_sh_dx_filtered_per_user():
     _cfg, pipeline, server = build_app()

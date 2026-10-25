@@ -91,6 +91,8 @@ class DxQuery:
     dx_call: str = ""
     band: str = ""
     mode: str = ""
+    freq_low_khz: float | None = None
+    freq_high_khz: float | None = None
 
 
 @dataclass
@@ -116,6 +118,8 @@ class CommandHandlers:
     dx_provider: Callable[[DxQuery], list[str]] | None = None
     # Band names accepted in ``SH/DX <band>`` (from the node band plan).
     band_names: frozenset[str] = frozenset()
+    # ``SH/SUN [<call|prefix|grid>]`` sunrise/sunset lookup.
+    sun_provider: Callable[[str], list[str]] | None = None
     grid_setter: Callable[[str], None] | None = None
     noise_setter: Callable[[str], None] | None = None
     dedupe_setter: Callable[[str], None] | None = None
@@ -503,23 +507,54 @@ def _parse_set(args: list[str], state: FilterState, h: CommandHandlers) -> Comma
     return CommandResult(handled=True, responses=[f"SET {sub}: acknowledged."])
 
 
+def _parse_freq_span(token: str) -> tuple[float, float] | None:
+    """Parse a DX Spider frequency selector: ``14000`` or ``14000/14350``."""
+    parts = token.split("/")
+    if len(parts) > 2 or not parts[0]:
+        return None
+    try:
+        values = [float(p) for p in parts if p]
+    except ValueError:
+        return None
+    if not values:
+        return None
+    low = values[0]
+    high = values[1] if len(values) > 1 else values[0]
+    if not (1.0 <= low <= 60000.0 and 1.0 <= high <= 60000.0):
+        return None
+    return (low, high) if low <= high else (high, low)
+
+
 def _parse_dx_query(args: list[str], band_names: frozenset[str]) -> DxQuery:
-    """Parse ``SH/DX [<n>] [<call|prefix>] [<band>] [<mode>]`` argument order-free."""
+    """Parse ``SH/DX [<n>] [<call|prefix>] [<band>] [<mode>] [on <f>[/<f>]]``."""
     query = DxQuery()
-    for token in args:
+    index = 0
+    while index < len(args):
+        token = args[index]
+        # DX Spider frequency window: "on 14000" or "on 14000/14350".
+        if token.upper() == "ON" and index + 1 < len(args):
+            span = _parse_freq_span(args[index + 1])
+            if span is not None:
+                query.freq_low_khz, query.freq_high_khz = span
+                index += 2
+                continue
         if token.isdigit():
             query.count = int(token)
+            index += 1
             continue
         band = _normalize_band(token)
         if band in band_names:
             query.band = band
+            index += 1
             continue
         mode = _SHOW_MODE_TOKENS.get(token.upper())
         if mode is not None:
             query.mode = mode
+            index += 1
             continue
         if not query.dx_call:
             query.dx_call = token.upper()
+        index += 1
     return query
 
 
@@ -561,6 +596,12 @@ def _parse_show(args: list[str], state: FilterState, h: CommandHandlers) -> Comm
         return CommandResult(
             handled=True, responses=[describe(state, full=True)], pause_seconds=30.0
         )
+
+    if sub == "SUN":
+        target = rest[0] if rest else h.operator_call
+        if h.sun_provider is not None:
+            return CommandResult(handled=True, responses=h.sun_provider(target))
+        return CommandResult(handled=True, responses=["SH/SUN is not available."])
 
     if sub in ("DX", "MYDX"):
         query = _parse_dx_query(rest, h.band_names)
@@ -658,9 +699,10 @@ def _parse_help(args: list[str]) -> CommandResult:
             "REJECT wins over PASS within a category."
         ),
         "SHOW": (
-            "SHOW DX [call|prefix] [band] [mode] [n]  (alias SH/DX)  Show recent\n"
-            "spots matching your filters. SHOW FILTER [FULL|<CATEGORY>] |\n"
-            "SHOW SETTINGS | SHOW DEDUPE | SHOW NEARBY | SHOW HOLD |\n"
+            "SHOW DX [call|prefix] [band] [mode] [on <f>[/<f>]] [n]  (alias SH/DX)\n"
+            "Show recent spots matching your filters. SHOW SUN [call|prefix|grid]\n"
+            "sunrise/sunset. SHOW FILTER [FULL|<CATEGORY>] | SHOW SETTINGS |\n"
+            "SHOW DEDUPE | SHOW NEARBY | SHOW HOLD |\n"
             "SHOW PROP <call|prefix|grid> [band] [mode]"
         ),
         "SET": "SET GRID <locator> | SET NOISE <class> | SET DEDUPE <FAST|MED|SLOW>",
@@ -683,8 +725,8 @@ def _help_text() -> str:
         "  PASS/REJECT BEACON|WWV|WCY|ANNOUNCE|SELF\n"
         "  PASS MINSNR <MODE> <dB|ALL> | PASS NEARBY ON|OFF|<km> [<low_km>]\n"
         "  DX <freq_khz> <call> [comment]\n"
-        "  SHOW DX [call|prefix] [band] [mode] [n] (alias SH/DX)\n"
-        "  SHOW FILTER [FULL|<CAT>] | SHOW SETTINGS\n"
+        "  SHOW DX [call|prefix] [band] [mode] [on <f>[/<f>]] [n] (alias SH/DX)\n"
+        "  SHOW SUN [call|prefix|grid] | SHOW FILTER [FULL|<CAT>] | SHOW SETTINGS\n"
         "  SHOW DEDUPE | SHOW NEARBY | SHOW HOLD\n"
         "  SHOW PROP <call|prefix|grid> [band] [mode] | WHOSPOTSME [band]\n"
         "  PAUSE [seconds] | RESUME\n"
