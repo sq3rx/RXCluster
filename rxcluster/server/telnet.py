@@ -29,6 +29,96 @@ log = logging.getLogger(__name__)
 
 CRLF = "\r\n"
 
+IAC = 0xFF
+DONT = 0xFE
+DO = 0xFD
+WONT = 0xFC
+WILL = 0xFB
+SB = 0xFA
+SE = 0xF0
+
+_CR = 0x0D
+_LF = 0x0A
+_NUL = 0x00
+_BS = 0x08
+_DEL = 0x7F
+
+
+class TelnetLineReader:
+    """Line reader for telnet clients (ConnectBot, N1MM, DX Spider, ...).
+
+    Plain ``StreamReader.readline()`` only splits on LF. Interactive telnet
+    clients such as ConnectBot send Enter as a bare CR (or CR NUL), so such a
+    reader would block forever and the session would look frozen. This reader
+    treats CR, LF, CRLF and CR NUL alike, strips telnet IAC negotiation, and
+    answers option requests so clients do not wait for a reply.
+    """
+
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.reader = reader
+        self.writer = writer
+
+    async def readline(self) -> bytes:
+        buf = bytearray()
+        state = "data"
+        sub_iac = False
+        while True:
+            chunk = await self.reader.read(1)
+            if not chunk:
+                return bytes(buf)
+            b = chunk[0]
+
+            if state == "iac":
+                if b == IAC:
+                    buf.append(b)
+                    state = "data"
+                elif b in (WILL, WONT, DO, DONT):
+                    option = await self.reader.read(1)
+                    if not option:
+                        return bytes(buf)
+                    await self._negotiate(b, option[0])
+                    state = "data"
+                elif b == SB:
+                    sub_iac = False
+                    state = "subneg"
+                else:
+                    state = "data"
+                continue
+
+            if state == "subneg":
+                if sub_iac:
+                    sub_iac = False
+                    if b == SE:
+                        state = "data"
+                elif b == IAC:
+                    sub_iac = True
+                continue
+
+            if b == IAC:
+                state = "iac"
+            elif b == _CR or b == _LF:
+                return bytes(buf)
+            elif b == _BS or b == _DEL:
+                if buf:
+                    buf.pop()
+            elif b != _NUL:
+                buf.append(b)
+
+    async def _negotiate(self, command: int, option: int) -> None:
+        # We neither echo nor implement any option, so refuse every offer and
+        # request. Refusing ECHO keeps the client's local echo enabled.
+        if command == DO:
+            reply = WONT
+        elif command == WILL:
+            reply = DONT
+        else:
+            return
+        try:
+            self.writer.write(bytes((IAC, reply, option)))
+            await self.writer.drain()
+        except (ConnectionResetError, BrokenPipeError, OSError):
+            pass
+
 
 class TelnetServer:
     def __init__(
@@ -84,7 +174,15 @@ class TelnetServer:
         writer.write(b"login: ")
         await writer.drain()
 
-        login_raw = await reader.readline()
+        telnet_reader = TelnetLineReader(reader, writer)
+        login_raw = b""
+        while True:
+            login_raw = await telnet_reader.readline()
+            if login_raw.strip():
+                break
+            if not login_raw and reader.at_eof():
+                writer.close()
+                return
         callsign = login_raw.decode("ascii", "ignore").strip().upper() or "N0CALL"
 
         state = default_state_from_config(self.cfg.defaults)
@@ -192,10 +290,13 @@ class TelnetServer:
     async def _read_loop(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, session: ClientSession
     ) -> None:
+        telnet_reader = TelnetLineReader(reader, writer)
         while True:
-            raw = await reader.readline()
+            raw = await telnet_reader.readline()
             if not raw:
-                break
+                if reader.at_eof():
+                    break
+                continue
             line = raw.decode("ascii", "ignore").rstrip("\r\n")
             if not line.strip():
                 # Keep-alive: N1MM sends a bare space periodically.

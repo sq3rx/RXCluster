@@ -233,6 +233,37 @@ async def test_telnet_show_filter_and_post():
 
 
 @pytest.mark.asyncio
+async def test_telnet_accepts_telnet_connectbot_line_endings():
+    """ConnectBot sends Enter as CR (or CR NUL) and may prefix IAC negotiation."""
+    _cfg, _pipeline, server = build_app()
+    await server.start()
+    port = server._server.sockets[0].getsockname()[1]
+
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    try:
+        await asyncio.wait_for(reader.readline(), 2)
+
+        # IAC DO TTYPE followed by the callsign and a bare CR NUL (ConnectBot).
+        writer.write(b"\xff\xfd\x18N0CALL\r\x00")
+        await writer.drain()
+        connected = await _read_until(reader, b"Connected")
+        assert b"Connected as N0CALL" in connected
+
+        # Commands must also be accepted with a bare CR.
+        writer.write(b"SHOW FILTER\r")
+        await writer.drain()
+        shown = await _read_until(reader, b"SWITCHES")
+        assert b"SWITCHES" in shown
+    finally:
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        await server.stop()
+
+
+@pytest.mark.asyncio
 async def test_telnet_persists_settings_per_callsign(tmp_path):
     store = UserStore(UserStoreConfig(directory=str(tmp_path)))
     _cfg, _pipeline, server = build_app(user_store=store)
